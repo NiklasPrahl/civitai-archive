@@ -498,6 +498,7 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
     Returns:
         int or None: modelId if successful, None otherwise
     """
+    local_preview_image_filename = None # Initialize here
     try:
         civitai_url = f"https://civitai.com/api/v1/model-versions/by-hash/{hash_value}"
         print(f"\nFetching version data from Civitai API:")
@@ -519,22 +520,21 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
                 update_missing_files_list(base_path, safetensors_path, None)  # Pass None to indicate file is back
                 
                 # Handle image downloads based on flags
-                local_preview_image_filename = None
                 if not skip_images and 'images' in response_data_to_save and response_data_to_save['images']:
                     if download_all_images:
-                        print(f"\nDownloading all preview images ({len(response_data['images'])} images found)")
-                        for i, image_data in enumerate(response_data['images']):
+                        print(f"\nDownloading all preview images ({len(response_data_to_save['images'])} images found)")
+                        for i, image_data in enumerate(response_data_to_save['images']):
                             if 'url' in image_data:
                                 is_video = image_data.get('type') == 'video'
                                 downloaded_filename = download_preview_image(image_data['url'], output_dir, base_name, i, is_video, image_data)
                                 if downloaded_filename and not local_preview_image_filename:
                                     local_preview_image_filename = downloaded_filename
                                 # Add a small delay between downloads to be nice to the server
-                                if i < len(response_data['images']) - 1:
+                                if i < len(response_data_to_save['images']) - 1:
                                     time.sleep(1)
                     else:
                         # Download only the first image
-                        if 'url' in response_data['images'][0]:
+                        if 'url' in response_data_to_save['images'][0]:
                             is_video = response_data_to_save['images'][0].get('type') == 'video'
                             downloaded_filename = download_preview_image(response_data_to_save['images'][0]['url'], output_dir, base_name, 0, is_video, response_data_to_save['images'][0])
                             if downloaded_filename and not local_preview_image_filename:
@@ -542,7 +542,7 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
 
                 
                 # Return modelId if it exists
-                return response_data.get('modelId')
+                return response_data_to_save.get('modelId')
         else:
             error_message = {
                 "error": "Failed to fetch Civitai data",

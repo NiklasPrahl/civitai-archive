@@ -1,286 +1,234 @@
 {% extends "base.html" %}
 
-{% block title %}{{ model_name }} - Civitai Manager{% endblock %}
+{% block title %}{{ metadata.name or model_name }} - Civitai Manager{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">
-        <i class="fas fa-brain me-2"></i>
-        {{ model_name }}
-    </h1>
+    <div>
+        <h1 class="h2">
+            <i class="fas fa-brain me-2"></i>
+            {{ metadata.name or model_name }}
+        </h1>
+        <h2 class="h5 text-muted">
+            Version {{ version.name or 'N/A' }} by {{ metadata.creator.name if metadata.creator and metadata.creator.name else 'Unknown' }}
+        </h2>
+    </div>
     <div class="btn-toolbar mb-2 mb-md-0">
         <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left me-1"></i>
-            Back to Dashboard
+            Back
         </a>
     </div>
 </div>
 
-<div class="row">
-    <!-- Model Metadata -->
-    <div class="col-md-12 mb-4">
-        <div class="card h-100">
+<div class="row align-items-start">
+    <!-- Left Column: Previews -->
+    <div class="col-lg-8">
+        <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Metadata
-                </h5>
+                <h5 class="mb-0"><i class="fas fa-images me-2"></i>Preview Images</h5>
             </div>
-            <div class="card-body">
-                {% if metadata %}
-                    <div class="row">
-                        {% if metadata.name %}
-                        <div class="col-12 mb-2">
-                            <strong>Name:</strong><br>
-                            <span class="text-primary">{{ metadata.name }}</span>
-                        </div>
-                        {% endif %}
-
-                        {% if model_files %}
-                        <div class="col-12 mb-2">
-                            <strong>Model Files:</strong><br>
-                            {% for file in model_files %}
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i class="fas fa-file-code me-2 text-primary"></i>
-                                        <strong>{{ file.split('/')[-1] }}</strong>
-                                    </div>
-                                    <span class="badge bg-primary">{{ file.split('.')[-1].upper() }}</span>
-                                </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        
-                        {% if metadata.description %}
-                        <div class="col-12 mb-2">
-                            <strong>Description:</strong><br>
-                            <small class="text-muted">{{ metadata.description[:200] }}{% if metadata.description|length > 200 %}...{% endif %}</small>
-                        </div>
-                        {% endif %}
-                        
-                        {% if metadata.type %}
-                        <div class="col-6 mb-2">
-                            <strong>Type:</strong><br>
-                            <span class="badge bg-info">{{ metadata.type }}</span>
-                        </div>
-                        {% endif %}
-                        
-                        {% if metadata.baseModel %}
-                        <div class="col-6 mb-2">
-                            <strong>Base Model:</strong><br>
-                            <span class="badge bg-secondary">{{ metadata.baseModel }}</span>
-                        </div>
-                        {% endif %}
-                        
-                        {% if metadata.tags %}
-                        <div class="col-12 mb-2">
-                            <strong>Tags:</strong><br>
-                            {% for tag in metadata.tags[:10] %}
-                                <span class="badge bg-light text-dark me-1 mb-1">{{ tag }}</span>
-                            {% endfor %}
-                            {% if metadata.tags|length > 10 %}
-                                <span class="badge bg-light text-dark">+{{ metadata.tags|length - 10 }} more</span>
+            <div class="card-body" style="overflow-y: auto; flex-grow: 1;">
+                {% if version.images %}
+                <div class="row row-cols-1 row-cols-lg-2 g-3 p-3"> {# 1 col on small, 2 on large screens, p-3 for padding #}
+                    {% for image in version.images %}
+                    <div class="col">
+                        <div class="card bg-light shadow-sm h-100">
+                            {% if image.local_url.endswith(('.mp4', '.webm', '.ogg')) %}
+                                <video class="img-fluid" controls style="border-radius: var(--bs-card-inner-border-radius);">
+                                    <source src="{{ image.local_url }}" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                            {% else %}
+                                <a href="{{ image.local_url }}" target="_blank" title="Click to open full image">
+                                    <img src="{{ image.local_url or url_for('static', filename='placeholder.png') }}" class="img-fluid" alt="Preview image {{ loop.index }}" style="border-radius: var(--bs-card-inner-border-radius);">
+                                </a>
+                            {% endif %}
+                            
+                            {% if image.nsfw %}
+                            <div class="card-img-overlay d-flex justify-content-end align-items-start p-2">
+                                <span class="badge bg-danger">NSFW</span>
+                            </div>
                             {% endif %}
                         </div>
-                        {% endif %}
-                        
-                        {% if metadata.creator %}
-                        <div class="col-6 mb-2">
-                            <strong>Creator:</strong><br>
-                            <span class="text-success">{{ metadata.creator.name if metadata.creator.name else 'Unknown' }}</span>
-                        </div>
-                        {% endif %}
-                        
-                        {% if metadata.modelVersions %}
-                        <div class="col-6 mb-2">
-                            <strong>Versions:</strong><br>
-                            <span class="badge bg-primary">{{ metadata.modelVersions|length }}</span>
-                        </div>
-                        {% endif %}
                     </div>
-                {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
-                        <p class="text-muted">No metadata available</p>
-                        <small class="text-muted">The model may not have been processed yet</small>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Model Images -->
-{% if metadata and metadata.modelVersions %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-images me-2"></i>
-                    Preview Images
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    {% for version in metadata.modelVersions %}
-                        {% if version.images %}
-                            {% for image in version.images[:6] %}
-                            <div class="col-md-4 col-lg-3 mb-3">
-                                <div class="card h-100">
-                                    {% set ext = '.mp4' if image.type == 'video' else '.jpeg' %}
-                                    {% set filename = model_name + '/' + model_name + '_preview_' + loop.index0|string + ext %}
-                                    <img src="{{ url_for('local_static_files', filename=filename) }}" class="card-img-top" alt="Preview image"
-                                         style="height: 200px; object-fit: cover;" onerror="this.onerror=null;this.src='{{ url_for('local_static_files', filename='img/placeholder.png') }}';">
-                                    <div class="card-body p-2">
-                                        <small class="text-muted">
-                                            {% if image.nsfw %}
-                                                <span class="badge bg-danger">NSFW</span>
-                                            {% endif %}
-                                            {% if image.width and image.height %}
-                                                {{ image.width }}x{{ image.height }}
-                                            {% endif %}
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        {% endif %}
                     {% endfor %}
                 </div>
-                
-                {% if metadata.modelVersions|length > 1 %}
-                <div class="text-center mt-3">
-                    <small class="text-muted">
-                        Showing images from the first version. 
-                        <a href="#" class="text-decoration-none">Show all versions</a>
-                    </small>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-image fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No preview images available</h5>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Info -->
+    <div class="col-lg-4">
+        <!-- Model Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Model Information</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-1"><strong>Type:</strong> <span class="badge bg-secondary">{{ metadata.type or 'Unknown' }}</span></p>
+                <p class="mb-1"><strong>Model ID:</strong> {{ metadata.id or 'N/A' }}</p>
+                <p class="mb-1"><strong>Version ID:</strong> {{ version.id or 'N/A' }}</p>
+                <hr>
+                <p class="mb-1"><strong>Base Model:</strong> <span class="badge bg-info">{{ version.baseModel or 'Unknown' }}</span></p>
+                <p class="mb-1"><strong>Created:</strong> <small>{{ version.createdAt.split('T')[0] if version.createdAt else 'N/A' }}</small></p>
+                <p class="mb-0"><strong>Updated:</strong> <small>{{ version.updatedAt.split('T')[0] if version.updatedAt else 'N/A' }}</small></p>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Statistics</h5>
+            </div>
+            <div class="card-body">
+                {% if version.stats %}
+                    <div class="row">
+                        <div class="col-6 mb-2"><i class="fas fa-download me-2 text-primary"></i>{{ version.stats.get('downloadCount', 0) | int }}</div>
+                        <div class="col-6 mb-2"><i class="fas fa-heart me-2 text-danger"></i>{{ version.stats.get('favoriteCount', 0) | int }}</div>
+                        <div class="col-6 mb-2"><i class="fas fa-star me-2 text-warning"></i>{{ "%.2f"|format(version.stats.get('rating', 0)) }} ({{ version.stats.get('ratingCount', 0) | int }})</div>
+                        <div class="col-6 mb-2"><i class="fas fa-comments me-2 text-info"></i>{{ version.stats.get('commentCount', 0) | int }}</div>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No statistics available.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Tags -->
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-tags me-2"></i>Tags</h5></div>
+            <div class="card-body">
+                {% if metadata.tags %}
+                    {% for tag in metadata.tags %}
+                        <span class="badge bg-light text-dark me-1 mb-1">{{ tag }}</span>
+                    {% endfor %}
+                {% elif version.trainedWords %} {# Fallback to trainedWords if metadata.tags is empty #}
+                    {% for word in version.trainedWords %}
+                        <span class="badge bg-light text-dark me-1 mb-1">{{ word }}</span>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">No tags available.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Trained Words -->
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-comment-dots me-2"></i>Trained Words</h5></div>
+            <div class="card-body">
+                {% for word in version.trainedWords %}
+                    <span class="badge bg-light text-dark me-1 mb-1">{{ word }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Description and File Info Row -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>Description</h5>
+            </div>
+            <div class="card-body">
+                <div id="description-container" class="description-collapsed">
+                    {{ metadata.description|safe if metadata.description else 'No description provided.' }}
                 </div>
+                <button id="read-more-btn" class="btn btn-link btn-sm p-0 mt-1">Read more</button>
+            </div>
+            <div class="card-footer">
+                {% if version.files and version.files[0] %}
+                    {% set file = version.files[0] %}
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>File: </strong><span class="text-break">{{ file.name or 'N/A' }}</span></p>
+                            <p class="mb-0"><strong>Size: </strong>{{ "%.2f"|format(file.sizeKB / 1024) }} MB</p>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            {% if version.downloadUrl %}
+                                <a href="{{ version.downloadUrl }}" target="_blank" class="btn btn-success btn-sm">
+                                    <i class="fas fa-download me-1"></i> Download
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                    <p class="mb-0"><strong>Hash (SHA256):</strong> 
+                        <small class="text-muted text-break user-select-all">{{ file.hashes['SHA256'] or 'N/A' }}</small>
+                    </p>
+                {% else %}
+                    <p class="text-muted">No file information available.</p>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
-{% endif %}
 
-<!-- Model Statistics -->
-{% if metadata %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-chart-bar me-2"></i>
-                    Statistics
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    {% if metadata.stats %}
-                    <div class="col-md-3 mb-3">
-                        <div class="border rounded p-3">
-                            <h4 class="text-primary">{{ metadata.stats.downloadCount or 0 }}</h4>
-                            <small class="text-muted">Downloads</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="border rounded p-3">
-                            <h4 class="text-success">{{ metadata.stats.rating or 0 }}</h4>
-                            <small class="text-muted">Rating</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="border rounded p-3">
-                            <h4 class="text-info">{{ metadata.stats.ratingCount or 0 }}</h4>
-                            <small class="text-muted">Ratings</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="border rounded p-3">
-                            <h4 class="text-warning">{{ metadata.stats.commentCount or 0 }}</h4>
-                            <small class="text-muted">Comments</small>
-                        </div>
-                    </div>
-                    {% else %}
-                    <div class="col-12 text-center py-4">
-                        <i class="fas fa-chart-line fa-2x text-muted mb-2"></i>
-                        <p class="text-muted">No statistics available</p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<!-- Actions -->
-<div class="row mt-4">
-    <div class="col-12 text-center">
-        <div class="btn-group" role="group">
-            <button type="button" class="btn btn-primary" onclick="reprocessModel()">
-                <i class="fas fa-sync-alt me-1"></i>
-                Reprocess Model
-            </button>
-            <a href="#" class="btn btn-outline-primary" onclick="openCivitaiPage()">
-                <i class="fas fa-external-link-alt me-1"></i>
-                View on Civitai
-            </a>
-            <button type="button" class="btn btn-outline-secondary" onclick="downloadMetadata()">
-                <i class="fas fa-download me-1"></i>
-                Export Metadata
-            </button>
-        </div>
-    </div>
-</div>
+<style>
+    #description-container.description-collapsed {
+        max-height: 100px; /* Adjust height as needed */
+        overflow: hidden;
+        position: relative;
+        -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+        mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+    }
+    #read-more-btn.hidden {
+        display: none;
+    }
+    .col-lg-8 .card {
+        display: flex;
+        flex-direction: column;
+    }
+</style>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function reprocessModel() {
-    if (confirm('Do you want to reprocess this model? This will update all metadata and images.')) {
-        // TODO: Implement reprocessing
-        alert('Function will be implemented...');
-    }
-}
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('description-container');
+    const btn = document.getElementById('read-more-btn');
 
-function openCivitaiPage() {
-    {% if metadata and metadata.modelVersions %}
-        const civitaiUrl = 'https://civitai.com/models/{{ metadata.id or "unknown" }}';
-        window.open(civitaiUrl, '_blank');
-    {% else %}
-        alert('Civitai URL not available. Model must be processed first.');
-    {% endif %}
-}
+    if (container && btn) {
+        if (container.scrollHeight <= container.clientHeight) {
+            btn.classList.add('hidden');
+        }
 
-function downloadMetadata() {
-    {% if metadata %}
-        const dataStr = JSON.stringify({{ metadata|tojson }}, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = '{{ model_name }}_metadata.json';
-        link.click();
-        URL.revokeObjectURL(url);
-    {% else %}
-        alert('No metadata available for export.');
-    {% endif %}
-}
-
-// Auto-refresh metadata every 30 seconds if not available
-{% if not metadata %}
-setInterval(() => {
-    fetch('/api/models')
-        .then(response => response.json())
-        .then(models => {
-            const model = models.find(m => m.name === '{{ model_name }}');
-            if (model && model.has_metadata) {
-                location.reload();
+        btn.addEventListener('click', function() {
+            if (container.classList.contains('description-collapsed')) {
+                container.classList.remove('description-collapsed');
+                container.style.webkitMaskImage = 'none';
+                container.style.maskImage = 'none';
+                btn.textContent = 'Read less';
+            } else {
+                container.classList.add('description-collapsed');
+                container.style.webkitMaskImage = 'linear-gradient(to bottom, black 50%, transparent 100%)';
+                container.style.maskImage = 'linear-gradient(to bottom, black 50%, transparent 100%)';
+                btn.textContent = 'Read more';
             }
-        })
-        .catch(error => console.error('Error checking model status:', error));
-}, 30000);
-{% endif %}
+        });
+    }
+});
+
+window.addEventListener('load', function() {
+    const rightColumn = document.querySelector('.col-lg-4');
+    const leftCard = document.querySelector('.col-lg-8 .card');
+
+    function adjustHeight() {
+        if (rightColumn && leftCard) {
+            leftCard.style.height = `${rightColumn.offsetHeight}px`;
+        }
+    }
+
+    adjustHeight();
+    window.addEventListener('resize', adjustHeight);
+});
 </script>
-{% endblock %} 
+{% endblock %}
