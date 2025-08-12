@@ -14,6 +14,7 @@ from civitai_manager.src.core.metadata_manager import (
 )
 from civitai_manager.src.utils.html_generators.browser_page import generate_global_summary
 from civitai_manager.src.utils.config import load_config, ConfigValidationError
+import json
 
 def parse_cli_args(require_args=False):
     """Parse and validate command line arguments."""
@@ -43,7 +44,14 @@ def parse_cli_args(require_args=False):
                        help='Remove data for models that no longer exist in the target directory')
     parser.add_argument('--noconfig', action='store_true',
                        help='Ignore config.json and use command line arguments only')
-
+    parser.add_argument('--web', action='store_true',
+                       help='Start the web interface instead of CLI mode')
+    parser.add_argument('--host', type=str, default='0.0.0.0',
+                       help='Host to bind the web server to (default: 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=5000,
+                       help='Port to bind the web server to (default: 5000)')
+    parser.add_argument('--debug', action='store_true',
+                       help='Enable debug mode for the web server')
 
     args = parser.parse_args()
     
@@ -80,13 +88,28 @@ def get_config():
     if not args.noconfig:
         print("Attempting to load config.json...")
         try:
-            config = load_config()
-            if config:
-                print("Successfully loaded configuration from config.json")
-                print(f"Config contents: {config}")
-                return config
-        except ConfigValidationError as e:
-            print(f"Error in config file: {str(e)}")
+            # Load unified web configuration
+            if os.path.exists('config.json'):
+                with open('config.json', 'r') as f:
+                    config = json.load(f)
+                
+                # Convert web config format to CLI format
+                cli_config = {}
+                if config.get('models_directory'):
+                    cli_config['all'] = config['models_directory']
+                if config.get('output_directory'):
+                    cli_config['output'] = config['output_directory']
+                if config.get('download_all_images'):
+                    cli_config['images'] = config['download_all_images']
+                if config.get('notimeout'):
+                    cli_config['notimeout'] = config['notimeout']
+                if config.get('skip_images'):
+                    cli_config['noimages'] = config['skip_images']
+                
+                if cli_config:
+                    print("Successfully loaded configuration from config.json")
+                    print(f"Config contents: {cli_config}")
+                    return cli_config
         except Exception as e:
             print(f"Error loading config file: {str(e)}")
     else:
@@ -99,7 +122,31 @@ def get_config():
     config.pop('noconfig')
     return config
 
+def start_web_server(host='0.0.0.0', port=5000, debug=False):
+    """Start the web interface."""
+    try:
+        from civitai_manager.web_app import app
+        print(f"Starting web interface on http://{host}:{port}")
+        print("Press Ctrl+C to stop the server")
+        app.run(host=host, port=port, debug=debug)
+    except ImportError as e:
+        print(f"Error importing web application: {e}")
+        print("Make sure all web dependencies are installed:")
+        print("pip install flask flask-wtf wtforms werkzeug")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error starting web server: {e}")
+        sys.exit(1)
+
 def main():
+    args = parse_cli_args(require_args=False)
+    
+    # Check if web mode is requested
+    if args.web:
+        start_web_server(host=args.host, port=args.port, debug=args.debug)
+        return
+    
+    # CLI mode - original functionality
     config = get_config()
     
     # Get base output path either from config/argument or user input

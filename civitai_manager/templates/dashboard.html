@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Civitai Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-tachometer-alt me-2"></i>
+        Dashboard
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-primary" onclick="processAllModels()">
+                <i class="fas fa-sync-alt me-1"></i>
+                Process All Models
+            </button>
+        </div>
+        <a href="{{ url_for('upload') }}" class="btn btn-success">
+            <i class="fas fa-plus me-1"></i>
+            New Model
+        </a>
+    </div>
+</div>
+
+<!-- Configuration Status -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-folder me-2"></i>
+                    Models Directory
+                </h5>
+                <p class="card-text">
+                    <code>{{ config.models_directory or 'Not configured' }}</code>
+                </p>
+                <a href="{{ url_for('config') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-cog me-1"></i>
+                    Configure
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-download me-2"></i>
+                    Output Directory
+                </h5>
+                <p class="card-text">
+                    <code>{{ config.output_directory or 'Not configured' }}</code>
+                </p>
+                <a href="{{ url_for('config') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-cog me-1"></i>
+                    Configure
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Models Overview -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-brain me-2"></i>
+            Models Overview
+            <span class="badge bg-primary ms-2">{{ models|length }}</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if models %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Model Name</th>
+                            <th>Files</th>
+                            <th>Metadata</th>
+                            <th>Images</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for model in models %}
+                        <tr>
+                            <td>
+                                <strong>{{ model.name }}</strong>
+                            </td>
+                            <td>
+                                {% if model.files %}
+                                    <span class="badge bg-info">{{ model.files|length }} file(s)</span>
+                                    <small class="d-block text-muted">
+                                        {% for file in model.files[:3] %}
+                                            {{ file }}{% if not loop.last %}, {% endif %}
+                                        {% endfor %}
+                                        {% if model.files|length > 3 %}...{% endif %}
+                                    </small>
+                                {% else %}
+                                    <span class="badge bg-warning">No files</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if model.has_metadata %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i>
+                                        Available
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-times me-1"></i>
+                                        Missing
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if model.has_images %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-image me-1"></i>
+                                        Available
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-image me-1"></i>
+                                        Missing
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('model_detail', model_name=model.name) }}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye me-1"></i>
+                                    Details
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No models found</h5>
+                <p class="text-muted">
+                    No models have been processed yet or the output directory is empty.
+                </p>
+                <a href="{{ url_for('upload') }}" class="btn btn-primary">
+                    <i class="fas fa-upload me-1"></i>
+                    Upload First Model
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Processing Status -->
+<div id="processingStatus" class="alert alert-info d-none" role="alert">
+    <i class="fas fa-spinner fa-spin me-2"></i>
+    <span id="processingMessage">Processing all models...</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function processAllModels() {
+    if (!confirm('Do you really want to process all models? This may take some time.')) {
+        return;
+    }
+    
+    const statusDiv = document.getElementById('processingStatus');
+    const messageSpan = document.getElementById('processingMessage');
+    
+    statusDiv.classList.remove('d-none');
+    messageSpan.textContent = 'Processing all models...';
+    
+    fetch('/process-all')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                messageSpan.textContent = 'Error: ' + data.error;
+                statusDiv.classList.remove('alert-info');
+                statusDiv.classList.add('alert-danger');
+            } else {
+                messageSpan.textContent = 'Processing started! Page will reload in 30 seconds...';
+                statusDiv.classList.remove('alert-info');
+                statusDiv.classList.add('alert-success');
+                
+                // Reload page after 30 seconds to show updated data
+                setTimeout(() => {
+                    window.location.reload();
+                }, 30000);
+            }
+        })
+        .catch(error => {
+            messageSpan.textContent = 'Error starting processing: ' + error;
+            statusDiv.classList.remove('alert-info');
+            statusDiv.classList.add('alert-danger');
+        });
+}
+
+// Auto-refresh status every 10 seconds
+setInterval(() => {
+    fetch('/api/status')
+        .then(response => response.json())
+        .then(data => {
+            // Update status if needed
+        })
+        .catch(error => {
+            console.error('Error fetching status:', error);
+        });
+}, 10000);
+</script>
+{% endblock %} 

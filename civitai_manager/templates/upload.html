@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}Model Upload - Civitai Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-upload me-2"></i>
+        Model Upload
+    </h1>
+    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>
+        Back to Dashboard
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cloud-upload-alt me-2"></i>
+                    Upload New Model
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-4">
+                        <label for="{{ form.model_file.id }}" class="form-label">
+                            <i class="fas fa-file me-1"></i>
+                            Select Model File
+                        </label>
+                        <div class="input-group">
+                            {{ form.model_file(class="form-control", accept=".safetensors,.ckpt,.pt,.pth,.bin") }}
+                            <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('{{ form.model_file.id }}').click()">
+                                <i class="fas fa-folder-open"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Supported formats: .safetensors, .ckpt, .pt, .pth, .bin (Max. 500MB)
+                        </div>
+                        {% if form.model_file.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.model_file.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h6>
+                            <i class="fas fa-info-circle me-2"></i>
+                            What happens during upload?
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start mb-2">
+                                    <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                    <div>
+                                        <strong>File is saved</strong><br>
+                                        <small class="text-muted">In the configured models directory</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-start mb-2">
+                                    <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                    <div>
+                                        <strong>Metadata is retrieved</strong><br>
+                                        <small class="text-muted">From Civitai based on file hash</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start mb-2">
+                                    <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                    <div>
+                                        <strong>Preview images are downloaded</strong><br>
+                                        <small class="text-muted">Based on your configuration</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-start mb-2">
+                                    <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                    <div>
+                                        <strong>HTML overview is updated</strong><br>
+                                        <small class="text-muted">Automatically after processing</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary btn-lg", id="submitBtn") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Upload Progress -->
+        <div id="uploadProgress" class="card mt-4 d-none">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-spinner fa-spin me-2"></i>
+                    Upload in Progress...
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%" id="progressBar">
+                        0%
+                    </div>
+                </div>
+                <div id="progressText" class="text-muted">
+                    Preparing upload...
+                </div>
+            </div>
+        </div>
+        
+        <!-- File Info -->
+        <div id="fileInfo" class="card mt-4 d-none">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-info me-2"></i>
+                    File Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Filename:</strong> <span id="fileName"></span></p>
+                        <p><strong>File Size:</strong> <span id="fileSize"></span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>File Type:</strong> <span id="fileType"></span></p>
+                        <p><strong>Last Modified:</strong> <span id="fileModified"></span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Help Section -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-question-circle me-2"></i>
+                    Help & Tips
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Supported Formats:</h6>
+                        <ul class="small">
+                            <li><strong>.safetensors</strong> - Safe tensor files</li>
+                            <li><strong>.ckpt</strong> - Checkpoint files</li>
+                            <li><strong>.pt/.pth</strong> - PyTorch models</li>
+                            <li><strong>.bin</strong> - Binary model files</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Important Notes:</h6>
+                        <ul class="small">
+                            <li>Maximum file size: 500MB</li>
+                            <li>Files are processed automatically</li>
+                            <li>Metadata is retrieved from Civitai</li>
+                            <li>Preview images are downloaded</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Note:</strong> Make sure you have configured the directories before uploading models.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('{{ form.model_file.id }}');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const fileType = document.getElementById('fileType');
+    const fileModified = document.getElementById('fileModified');
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Show file info when file is selected
+    fileInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileType.textContent = file.type || 'Unknown';
+            fileModified.textContent = new Date(file.lastModified).toLocaleString('en-US');
+            fileInfo.classList.remove('d-none');
+        } else {
+            fileInfo.classList.add('d-none');
+        }
+    });
+    
+    // Handle form submission with progress
+    uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const xhr = new XMLHttpRequest();
+        
+        // Show progress
+        uploadProgress.classList.remove('d-none');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Upload in progress...';
+        
+        // Progress tracking
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                progressBar.style.width = percentComplete + '%';
+                progressBar.textContent = Math.round(percentComplete) + '%';
+                
+                if (percentComplete < 50) {
+                    progressText.textContent = 'Uploading file...';
+                } else if (percentComplete < 100) {
+                    progressText.textContent = 'Processing model...';
+                } else {
+                    progressText.textContent = 'Finalizing...';
+                }
+            }
+        });
+        
+        // Handle completion
+        xhr.addEventListener('load', function() {
+            if (xhr.status === 200) {
+                progressText.textContent = 'Upload successful! Redirecting...';
+                progressBar.classList.remove('progress-bar-animated');
+                progressBar.classList.add('bg-success');
+                
+                // Redirect after a short delay
+                setTimeout(() => {
+                    window.location.href = '{{ url_for("index") }}';
+                }, 2000);
+            } else {
+                progressText.textContent = 'Upload error!';
+                progressBar.classList.add('bg-danger');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '{{ form.submit.label }}';
+            }
+        });
+        
+        // Handle errors
+        xhr.addEventListener('error', function() {
+            progressText.textContent = 'Network error!';
+            progressBar.classList.add('bg-danger');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '{{ form.submit.label }}';
+        });
+        
+        // Send request
+        xhr.open('POST', '{{ url_for("upload") }}');
+        xhr.send(formData);
+    });
+    
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+});
+</script>
+{% endblock %} 

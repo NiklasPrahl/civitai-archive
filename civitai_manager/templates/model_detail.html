@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}{{ model_name }} - Civitai Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-brain me-2"></i>
+        {{ model_name }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>
+            Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Model Files -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-file me-2"></i>
+                    Model Files
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if model_files %}
+                    <div class="list-group list-group-flush">
+                        {% for file in model_files %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-file-code me-2 text-primary"></i>
+                                <strong>{{ file }}</strong>
+                            </div>
+                            <span class="badge bg-primary">{{ file.split('.')[-1].upper() }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                        <p class="text-muted">No model files found</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Metadata -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Metadata
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if metadata %}
+                    <div class="row">
+                        {% if metadata.name %}
+                        <div class="col-12 mb-2">
+                            <strong>Name:</strong><br>
+                            <span class="text-primary">{{ metadata.name }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if metadata.description %}
+                        <div class="col-12 mb-2">
+                            <strong>Description:</strong><br>
+                            <small class="text-muted">{{ metadata.description[:200] }}{% if metadata.description|length > 200 %}...{% endif %}</small>
+                        </div>
+                        {% endif %}
+                        
+                        {% if metadata.type %}
+                        <div class="col-6 mb-2">
+                            <strong>Type:</strong><br>
+                            <span class="badge bg-info">{{ metadata.type }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if metadata.baseModel %}
+                        <div class="col-6 mb-2">
+                            <strong>Base Model:</strong><br>
+                            <span class="badge bg-secondary">{{ metadata.baseModel }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if metadata.tags %}
+                        <div class="col-12 mb-2">
+                            <strong>Tags:</strong><br>
+                            {% for tag in metadata.tags[:10] %}
+                                <span class="badge bg-light text-dark me-1 mb-1">{{ tag }}</span>
+                            {% endfor %}
+                            {% if metadata.tags|length > 10 %}
+                                <span class="badge bg-light text-dark">+{{ metadata.tags|length - 10 }} more</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if metadata.creator %}
+                        <div class="col-6 mb-2">
+                            <strong>Creator:</strong><br>
+                            <span class="text-success">{{ metadata.creator.name if metadata.creator.name else 'Unknown' }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if metadata.modelVersions %}
+                        <div class="col-6 mb-2">
+                            <strong>Versions:</strong><br>
+                            <span class="badge bg-primary">{{ metadata.modelVersions|length }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                        <p class="text-muted">No metadata available</p>
+                        <small class="text-muted">The model may not have been processed yet</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Model Images -->
+{% if metadata and metadata.modelVersions %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-images me-2"></i>
+                    Preview Images
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for version in metadata.modelVersions %}
+                        {% if version.images %}
+                            {% for image in version.images[:6] %}
+                            <div class="col-md-4 col-lg-3 mb-3">
+                                <div class="card h-100">
+                                    <img src="{{ image.url }}" class="card-img-top" alt="Preview image" 
+                                         style="height: 200px; object-fit: cover;">
+                                    <div class="card-body p-2">
+                                        <small class="text-muted">
+                                            {% if image.nsfw %}
+                                                <span class="badge bg-danger">NSFW</span>
+                                            {% endif %}
+                                            {% if image.width and image.height %}
+                                                {{ image.width }}x{{ image.height }}
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                
+                {% if metadata.modelVersions|length > 1 %}
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        Showing images from the first version. 
+                        <a href="#" class="text-decoration-none">Show all versions</a>
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Model Statistics -->
+{% if metadata %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Statistics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    {% if metadata.stats %}
+                    <div class="col-md-3 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-primary">{{ metadata.stats.downloadCount or 0 }}</h4>
+                            <small class="text-muted">Downloads</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-success">{{ metadata.stats.rating or 0 }}</h4>
+                            <small class="text-muted">Rating</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-info">{{ metadata.stats.ratingCount or 0 }}</h4>
+                            <small class="text-muted">Ratings</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-warning">{{ metadata.stats.commentCount or 0 }}</h4>
+                            <small class="text-muted">Comments</small>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="col-12 text-center py-4">
+                        <i class="fas fa-chart-line fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No statistics available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Actions -->
+<div class="row mt-4">
+    <div class="col-12 text-center">
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-primary" onclick="reprocessModel()">
+                <i class="fas fa-sync-alt me-1"></i>
+                Reprocess Model
+            </button>
+            <a href="#" class="btn btn-outline-primary" onclick="openCivitaiPage()">
+                <i class="fas fa-external-link-alt me-1"></i>
+                View on Civitai
+            </a>
+            <button type="button" class="btn btn-outline-secondary" onclick="downloadMetadata()">
+                <i class="fas fa-download me-1"></i>
+                Export Metadata
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function reprocessModel() {
+    if (confirm('Do you want to reprocess this model? This will update all metadata and images.')) {
+        // TODO: Implement reprocessing
+        alert('Function will be implemented...');
+    }
+}
+
+function openCivitaiPage() {
+    {% if metadata and metadata.modelVersions %}
+        const civitaiUrl = 'https://civitai.com/models/{{ metadata.id or "unknown" }}';
+        window.open(civitaiUrl, '_blank');
+    {% else %}
+        alert('Civitai URL not available. Model must be processed first.');
+    {% endif %}
+}
+
+function downloadMetadata() {
+    {% if metadata %}
+        const dataStr = JSON.stringify({{ metadata|tojson }}, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = '{{ model_name }}_metadata.json';
+        link.click();
+        URL.revokeObjectURL(url);
+    {% else %}
+        alert('No metadata available for export.');
+    {% endif %}
+}
+
+// Auto-refresh metadata every 30 seconds if not available
+{% if not metadata %}
+setInterval(() => {
+    fetch('/api/models')
+        .then(response => response.json())
+        .then(models => {
+            const model = models.find(m => m.name === '{{ model_name }}');
+            if (model && model.has_metadata) {
+                location.reload();
+            }
+        })
+        .catch(error => console.error('Error checking model status:', error));
+}, 30000);
+{% endif %}
+</script>
+{% endblock %} 
