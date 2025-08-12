@@ -17,40 +17,8 @@
 </div>
 
 <div class="row">
-    <!-- Model Files -->
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-file me-2"></i>
-                    Model Files
-                </h5>
-            </div>
-            <div class="card-body">
-                {% if model_files %}
-                    <div class="list-group list-group-flush">
-                        {% for file in model_files %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <i class="fas fa-file-code me-2 text-primary"></i>
-                                <strong>{{ file }}</strong>
-                            </div>
-                            <span class="badge bg-primary">{{ file.split('.')[-1].upper() }}</span>
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
-                        <p class="text-muted">No model files found</p>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
     <!-- Model Metadata -->
-    <div class="col-md-6 mb-4">
+    <div class="col-md-12 mb-4">
         <div class="card h-100">
             <div class="card-header">
                 <h5 class="mb-0">
@@ -65,6 +33,21 @@
                         <div class="col-12 mb-2">
                             <strong>Name:</strong><br>
                             <span class="text-primary">{{ metadata.name }}</span>
+                        </div>
+                        {% endif %}
+
+                        {% if model_files %}
+                        <div class="col-12 mb-2">
+                            <strong>Model Files:</strong><br>
+                            {% for file in model_files %}
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="fas fa-file-code me-2 text-primary"></i>
+                                        <strong>{{ file.split('/')[-1] }}</strong>
+                                    </div>
+                                    <span class="badge bg-primary">{{ file.split('.')[-1].upper() }}</span>
+                                </div>
+                            {% endfor %}
                         </div>
                         {% endif %}
                         

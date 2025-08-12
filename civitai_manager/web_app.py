@@ -219,21 +219,32 @@ def upload():
                 def process_upload():
                     try:
                         output_dir = Path(config['output_directory'])
-                        process_single_file(
+                        print(f"Starting automatic processing of {filename}...")
+                        
+                        # Process the uploaded file
+                        success = process_single_file(
                             Path(final_path), 
                             output_dir,
                             download_all_images=config.get('download_all_images', False),
                             skip_images=config.get('skip_images', False)
                         )
-                        generate_global_summary(output_dir)
+                        
+                        if success:
+                            print(f"Successfully processed {filename}")
+                            # Generate global summary
+                            generate_global_summary(output_dir)
+                            print(f"Global summary updated for {filename}")
+                        else:
+                            print(f"Failed to process {filename}")
+                            
                     except Exception as e:
-                        print(f"Error processing uploaded file: {e}")
+                        print(f"Error processing uploaded file {filename}: {e}")
                 
                 thread = threading.Thread(target=process_upload)
                 thread.daemon = True
                 thread.start()
                 
-                flash(f'Model {filename} uploaded and processing started!', 'success')
+                flash(f'Model {filename} uploaded successfully! Processing started automatically in the background.', 'success')
                 return redirect(url_for('index'))
                 
             except Exception as e:
@@ -281,7 +292,6 @@ def model_detail(model_name):
     """Show detailed information about a specific model"""
     config = load_web_config()
     output_dir = config.get('output_directory')
-    models_dir = config.get('models_directory')
     
     if not output_dir:
         return redirect(url_for('config'))
@@ -291,33 +301,11 @@ def model_detail(model_name):
         flash('Model not found!', 'error')
         return redirect(url_for('index'))
     
-    # Get model files and metadata
-    model_files = []
+    # Get metadata first
     metadata = {}
+    model_files = []
     
     try:
-        # Get model files from the models directory (including subdirectories)
-        if models_dir and os.path.exists(models_dir):
-            # Search recursively for model files
-            for root, dirs, files in os.walk(models_dir):
-                for file in files:
-                    if file.endswith(('.safetensors', '.ckpt', '.pt', '.pth', '.bin')):
-                        # Check if this file corresponds to the current model
-                        # by looking for matching hash or metadata
-                        model_hash_file = os.path.join(model_path, f'{model_name}_hash.json')
-                        if os.path.exists(model_hash_file):
-                            try:
-                                with open(model_hash_file, 'r') as f:
-                                    hash_data = json.load(f)
-                                    model_hash = hash_data.get('hash_value', '')
-                                    filename = hash_data.get('filename', '')
-                                    if model_hash and filename == file:
-                                        # This is a processed model, add the file with relative path
-                                        rel_path = os.path.relpath(os.path.join(root, file), models_dir)
-                                        model_files.append(rel_path)
-                            except:
-                                pass
-        
         # Try to load metadata from multiple possible files
         metadata_files = [
             os.path.join(model_path, 'model_info.json'),
@@ -334,7 +322,28 @@ def model_detail(model_name):
                 except Exception as e:
                     print(f"Error reading metadata file {metadata_file}: {e}")
                     continue
-                    
+        
+        # If we have metadata, get model files from it
+        if metadata:
+            # Look for model files in the models directory based on hash info
+            models_dir = config.get('models_directory')
+            if models_dir and os.path.exists(models_dir):
+                hash_file = os.path.join(model_path, f'{model_name}_hash.json')
+                if os.path.exists(hash_file):
+                    try:
+                        with open(hash_file, 'r') as f:
+                            hash_data = json.load(f)
+                            filename = hash_data.get('filename', '')
+                            if filename:
+                                # Search for the file in models directory
+                                for root, dirs, files in os.walk(models_dir):
+                                    if filename in files:
+                                        rel_path = os.path.relpath(os.path.join(root, filename), models_dir)
+                                        model_files.append(rel_path)
+                                        break
+                    except Exception as e:
+                        print(f"Error reading hash file: {e}")
+                        
     except Exception as e:
         print(f"Error reading model details: {e}")
     

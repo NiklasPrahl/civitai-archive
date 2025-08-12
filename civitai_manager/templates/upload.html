@@ -39,7 +39,7 @@
                             </button>
                         </div>
                         <div class="form-text">
-                            Supported formats: .safetensors, .ckpt, .pt, .pth, .bin (Max. 500MB)
+                            Supported formats: .safetensors, .ckpt, .pt, .pth, .bin
                         </div>
                         {% if form.model_file.errors %}
                             <div class="invalid-feedback d-block">
@@ -49,42 +49,62 @@
                             </div>
                         {% endif %}
                     </div>
+
+                    <div class="mb-4 text-center border rounded p-4" id="dropArea">
+                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Drag & Drop your model file here, or <a href="#" id="browseFiles">browse</a></p>
+                        <input type="file" id="hiddenFileInput" style="display: none;" accept=".safetensors,.ckpt,.pt,.pth,.bin">
+                    </div>
                     
                     <div class="mb-4">
-                        <h6>
-                            <i class="fas fa-info-circle me-2"></i>
-                            What happens during upload?
-                        </h6>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-start mb-2">
-                                    <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                    <div>
-                                        <strong>File is saved</strong><br>
-                                        <small class="text-muted">In the configured models directory</small>
+                        <p>
+                            <button class="btn btn-link p-0" type="button" data-bs-toggle="collapse" data-bs-target="#uploadProcessCollapse" aria-expanded="false" aria-controls="uploadProcessCollapse">
+                                <i class="fas fa-info-circle me-2"></i>
+                                What happens during upload?
+                                <i class="fas fa-chevron-right ms-2 collapse-arrow"></i>
+                            </button>
+                        </p>
+                        <div class="collapse" id="uploadProcessCollapse">
+                            <div class="card card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-start mb-2">
+                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                            <div>
+                                                <strong>File is saved</strong><br>
+                                                <small class="text-muted">In the configured models directory</small>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex align-items-start mb-2">
+                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                            <div>
+                                                <strong>Automatic processing starts</strong><br>
+                                                <small class="text-muted">Model is processed immediately after upload</small>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex align-items-start mb-2">
+                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                            <div>
+                                                <strong>Metadata is retrieved</strong><br>
+                                                <small class="text-muted">From Civitai based on file hash</small>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="d-flex align-items-start mb-2">
-                                    <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                    <div>
-                                        <strong>Metadata is retrieved</strong><br>
-                                        <small class="text-muted">From Civitai based on file hash</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-start mb-2">
-                                    <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                    <div>
-                                        <strong>Preview images are downloaded</strong><br>
-                                        <small class="text-muted">Based on your configuration</small>
-                                    </div>
-                                </div>
-                                <div class="d-flex align-items-start mb-2">
-                                    <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                    <div>
-                                        <strong>HTML overview is updated</strong><br>
-                                        <small class="text-muted">Automatically after processing</small>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-start mb-2">
+                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                            <div>
+                                                <strong>Preview images are downloaded</strong><br>
+                                                <small class="text-muted">Based on your configuration</small>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex align-items-start mb-2">
+                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                            <div>
+                                                <strong>HTML overview is updated</strong><br>
+                                                <small class="text-muted">Automatically after processing</small>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -141,39 +161,54 @@
             </div>
         </div>
         
-        <!-- Help Section -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-question-circle me-2"></i>
-                    Help & Tips
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Supported Formats:</h6>
-                        <ul class="small">
-                            <li><strong>.safetensors</strong> - Safe tensor files</li>
-                            <li><strong>.ckpt</strong> - Checkpoint files</li>
-                            <li><strong>.pt/.pth</strong> - PyTorch models</li>
-                            <li><strong>.bin</strong> - Binary model files</li>
-                        </ul>
+        <!-- Help & Tips Button -->
+        <div class="text-center mt-4">
+            <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#helpModal">
+                <i class="fas fa-question-circle me-2"></i>
+                Help & Tips
+            </button>
+        </div>
+
+        <!-- Help Modal -->
+        <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="helpModalLabel">
+                            <i class="fas fa-question-circle me-2"></i>
+                            Help & Tips
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="col-md-6">
-                        <h6>Important Notes:</h6>
-                        <ul class="small">
-                            <li>Maximum file size: 500MB</li>
-                            <li>Files are processed automatically</li>
-                            <li>Metadata is retrieved from Civitai</li>
-                            <li>Preview images are downloaded</li>
-                        </ul>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Supported Formats:</h6>
+                                <ul class="small">
+                                    <li><strong>.safetensors</strong> - Safe tensor files</li>
+                                    <li><strong>.ckpt</strong> - Checkpoint files</li>
+                                    <li><strong>.pt/.pth</strong> - PyTorch models</li>
+                                    <li><strong>.bin</strong> - Binary model files</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Important Notes:</h6>
+                                <ul class="small">
+                                    <li>Maximum file size: 500MB</li>
+                                    <li>Files are processed automatically</li>
+                                    <li>Metadata is retrieved from Civitai</li>
+                                    <li>Preview images are downloaded</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Note:</strong> Make sure you have configured the directories before uploading models.
+                        </div>
                     </div>
-                </div>
-                
-                <div class="alert alert-warning mt-3">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Note:</strong> Make sure you have configured the directories before uploading models.
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -277,6 +312,82 @@ document.addEventListener('DOMContentLoaded', function() {
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Handle collapse arrow rotation
+    const uploadProcessCollapse = document.getElementById('uploadProcessCollapse');
+    const collapseArrow = document.querySelector('button[data-bs-target="#uploadProcessCollapse"] .collapse-arrow');
+
+    uploadProcessCollapse.addEventListener('show.bs.collapse', function () {
+        collapseArrow.classList.remove('fa-chevron-right');
+        collapseArrow.classList.add('fa-chevron-down');
+    });
+
+    uploadProcessCollapse.addEventListener('hide.bs.collapse', function () {
+        collapseArrow.classList.remove('fa-chevron-down');
+        collapseArrow.classList.add('fa-chevron-right');
+    });
+
+    // Drag and Drop functionality
+    const dropArea = document.getElementById('dropArea');
+    const hiddenFileInput = document.getElementById('hiddenFileInput');
+    const browseFiles = document.getElementById('browseFiles');
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false); // Prevent default for entire body
+    });
+
+    // Highlight drop area when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false);
+    });
+
+    // Handle dropped files
+    dropArea.addEventListener('drop', handleDrop, false);
+
+    // Handle browse link click
+    browseFiles.addEventListener('click', function(e) {
+        e.preventDefault();
+        hiddenFileInput.click();
+    });
+
+    // Handle file selection from hidden input
+    hiddenFileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            fileInput.files = this.files; // Assign files to the original form input
+            fileInput.dispatchEvent(new Event('change')); // Trigger change event
+        }
+    });
+
+    function preventDefaults (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlight(e) {
+        dropArea.classList.add('border-primary');
+        dropArea.classList.add('bg-light');
+    }
+
+    function unhighlight(e) {
+        dropArea.classList.remove('border-primary');
+        dropArea.classList.remove('bg-light');
+    }
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            fileInput.files = files; // Assign files to the original form input
+            fileInput.dispatchEvent(new Event('change')); // Trigger change event
+        }
     }
 });
 </script>
