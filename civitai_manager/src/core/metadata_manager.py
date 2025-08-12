@@ -242,14 +242,14 @@ def download_preview_image(image_url, output_dir, base_name, index=None, is_vide
                     json.dump(image_data, f, indent=4)
 
             print(f"Preview image successfully saved to {image_path}")
-            return True
+            return image_path.name # Return filename relative to output_dir
         else:
             print(f"Error: Could not download image (Status code: {response.status_code})")
-            return False
+            return None
             
     except Exception as e:
         print(f"Error downloading preview image: {str(e)}")
-        return False
+        return None
 
 def generate_image_json_files(base_output_path):
     """
@@ -508,30 +508,37 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
         civitai_path = output_dir / f"{base_name}_civitai_model_version.json"
         
         if response.status_code == 200:
+            response_data_to_save = response.json() # Call json() only once
+            if local_preview_image_filename:
+                response_data_to_save['local_preview_image'] = local_preview_image_filename
             with open(civitai_path, 'w', encoding='utf-8') as f:
-                response_data = response.json()
-                json.dump(response_data, f, indent=4)
+                json.dump(response_data_to_save, f, indent=4)
                 print(f"Version data successfully saved to {civitai_path}")
 
                 # Remove from missing files list if it was there before
                 update_missing_files_list(base_path, safetensors_path, None)  # Pass None to indicate file is back
                 
                 # Handle image downloads based on flags
-                if not skip_images and 'images' in response_data and response_data['images']:
+                local_preview_image_filename = None
+                if not skip_images and 'images' in response_data_to_save and response_data_to_save['images']:
                     if download_all_images:
                         print(f"\nDownloading all preview images ({len(response_data['images'])} images found)")
                         for i, image_data in enumerate(response_data['images']):
                             if 'url' in image_data:
                                 is_video = image_data.get('type') == 'video'
-                                download_preview_image(image_data['url'], output_dir, base_name, i, is_video, image_data)
+                                downloaded_filename = download_preview_image(image_data['url'], output_dir, base_name, i, is_video, image_data)
+                                if downloaded_filename and not local_preview_image_filename:
+                                    local_preview_image_filename = downloaded_filename
                                 # Add a small delay between downloads to be nice to the server
                                 if i < len(response_data['images']) - 1:
                                     time.sleep(1)
                     else:
                         # Download only the first image
                         if 'url' in response_data['images'][0]:
-                            is_video = response_data['images'][0].get('type') == 'video'
-                            download_preview_image(response_data['images'][0]['url'], output_dir, base_name, 0, is_video, response_data['images'][0])
+                            is_video = response_data_to_save['images'][0].get('type') == 'video'
+                            downloaded_filename = download_preview_image(response_data_to_save['images'][0]['url'], output_dir, base_name, 0, is_video, response_data_to_save['images'][0])
+                            if downloaded_filename and not local_preview_image_filename:
+                                local_preview_image_filename = downloaded_filename
 
                 
                 # Return modelId if it exists

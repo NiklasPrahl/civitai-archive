@@ -128,8 +128,10 @@
                             {% for image in version.images[:6] %}
                             <div class="col-md-4 col-lg-3 mb-3">
                                 <div class="card h-100">
-                                    <img src="{{ image.url }}" class="card-img-top" alt="Preview image" 
-                                         style="height: 200px; object-fit: cover;">
+                                    {% set ext = '.mp4' if image.type == 'video' else '.jpeg' %}
+                                    {% set filename = model_name + '/' + model_name + '_preview_' + loop.index0|string + ext %}
+                                    <img src="{{ url_for('local_static_files', filename=filename) }}" class="card-img-top" alt="Preview image"
+                                         style="height: 200px; object-fit: cover;" onerror="this.onerror=null;this.src='{{ url_for('local_static_files', filename='img/placeholder.png') }}';">
                                     <div class="card-body p-2">
                                         <small class="text-muted">
                                             {% if image.nsfw %}

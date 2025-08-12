@@ -28,7 +28,7 @@ app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 
 # Global configuration
-CONFIG_FILE = 'config.json'
+CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json')) # Adjusted path
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'safetensors', 'ckpt', 'pt', 'pth', 'bin'}
 
@@ -72,9 +72,11 @@ def load_web_config():
                 if 'skip_images' not in config:
                     config['skip_images'] = False
                 
+                print(f"DEBUG: Loaded config: {config}")
                 return config
     except Exception as e:
-        print(f"Error loading config: {e}")
+        print(f"DEBUG: Error loading config: {e}")
+    print("DEBUG: Returning empty config.")
     return {}
 
 def save_web_config(config):
@@ -92,25 +94,62 @@ def get_models_info():
     config = load_web_config()
     output_dir = config.get('output_directory')
     models_dir = config.get('models_directory')
-    
+
     if not output_dir or not os.path.exists(output_dir):
         return []
-    
+
     models = []
     try:
         for item in os.listdir(output_dir):
             item_path = os.path.join(output_dir, item)
             if os.path.isdir(item_path):
-                # Check for model info
                 model_info = {
                     'name': item,
                     'path': item_path,
-                    'has_metadata': os.path.exists(os.path.join(item_path, 'model_info.json')) or 
-                                   os.path.exists(os.path.join(item_path, f'{item}_civitai_model.json')),
-                    'has_images': len([f for f in os.listdir(item_path) if f.endswith(('.jpg', '.jpeg', '.png', '.webp'))]) > 0,
-                    'files': []
+                    'has_metadata': False, # Will be set to True if metadata is loaded
+                    'has_images': False,   # Will be set to True if images are found
+                    'files': [],
+                    'title': item, # Default title
+                    'author': 'Unknown',
+                    'tags': [],
+                    'preview_image_url': url_for('local_static_files', filename='placeholder.png') # Default placeholder
                 }
+
+                # Try to load metadata
+                metadata = {}
+                metadata_files = [
+                    os.path.join(item_path, 'model_info.json'),
+                    os.path.join(item_path, f'{item}_civitai_model.json'),
+                    os.path.join(item_path, f'{item}_metadata.json')
+                ]
+                for metadata_file in metadata_files:
+                    if os.path.exists(metadata_file):
+                        try:
+                            with open(metadata_file, 'r') as f:
+                                metadata = json.load(f)
+                                model_info['has_metadata'] = True
+                                break
+                        except Exception as e:
+                            print(f"Error reading metadata file {metadata_file}: {e}")
+                            continue
                 
+                if metadata:
+                    model_info['title'] = metadata.get('name', item)
+                    if metadata.get('creator') and metadata['creator'].get('name'):
+                        model_info['author'] = metadata['creator']['name']
+                    model_info['tags'] = metadata.get('tags', [])
+
+                    # Get preview image URL
+                if metadata and metadata.get('local_preview_image'):
+                    model_info['preview_image_url'] = url_for('local_static_files', filename=f"{item}/{metadata['local_preview_image']}")
+                    model_info['has_images'] = True
+                else:
+                    # Fallback to first local image if not in metadata
+                    local_images = [f for f in os.listdir(item_path) if f.endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+                    if local_images:
+                        model_info['preview_image_url'] = url_for('local_static_files', filename=f'{item}/{local_images[0]}')
+                        model_info['has_images'] = True
+
                 # Get model files from the models directory (including subdirectories)
                 if models_dir and os.path.exists(models_dir):
                     # Search recursively for model files
@@ -132,11 +171,12 @@ def get_models_info():
                                                 model_info['files'].append(rel_path)
                                     except:
                                         pass
-                
+
+                print(f"Generated preview_image_url for {item}: {model_info['preview_image_url']}")
                 models.append(model_info)
     except Exception as e:
         print(f"Error reading models directory: {e}")
-    
+
     return models
 
 @app.route('/')
@@ -292,76 +332,94 @@ def model_detail(model_name):
     """Show detailed information about a specific model"""
     config = load_web_config()
     output_dir = config.get('output_directory')
-    
+
     if not output_dir:
         return redirect(url_for('config'))
-    
+
     model_path = os.path.join(output_dir, model_name)
     if not os.path.exists(model_path):
         flash('Model not found!', 'error')
         return redirect(url_for('index'))
-    
-    # Get metadata first
+
     metadata = {}
     model_files = []
-    
+
     try:
-        # Try to load metadata from multiple possible files
-        metadata_files = [
-            os.path.join(model_path, 'model_info.json'),
-            os.path.join(model_path, f'{model_name}_civitai_model.json'),
-            os.path.join(model_path, f'{model_name}_metadata.json')
-        ]
-        
-        for metadata_file in metadata_files:
-            if os.path.exists(metadata_file):
-                try:
-                    with open(metadata_file, 'r') as f:
-                        metadata = json.load(f)
-                        break  # Use the first found metadata file
-                except Exception as e:
-                    print(f"Error reading metadata file {metadata_file}: {e}")
-                    continue
-        
-        # If we have metadata, get model files from it
+        # Load main model metadata
+        model_metadata_path = os.path.join(model_path, f'{model_name}_civitai_model.json')
+        if os.path.exists(model_metadata_path):
+            with open(model_metadata_path, 'r') as f:
+                metadata = json.load(f)
+
+        # Load version-specific metadata to get correct image details
+        version_metadata_path = os.path.join(model_path, f'{model_name}_civitai_model_version.json')
+        if os.path.exists(version_metadata_path):
+            with open(version_metadata_path, 'r') as f:
+                version_metadata = json.load(f)
+            
+            # Inject the detailed image list from version data into the main metadata
+            if metadata and 'modelVersions' in metadata and version_metadata:
+                version_id = version_metadata.get('id')
+                for i, version in enumerate(metadata['modelVersions']):
+                    if version.get('id') == version_id:
+                        # Found the matching version, replace its images array
+                        metadata['modelVersions'][i]['images'] = version_metadata.get('images', [])
+                        break
+                else:
+                    # If no match found, overwrite the first version's images as a fallback
+                    if metadata['modelVersions']:
+                        metadata['modelVersions'][0]['images'] = version_metadata.get('images', [])
+
+        # Fallback to model_info.json if main metadata is missing
+        if not metadata:
+            model_info_path = os.path.join(model_path, 'model_info.json')
+            if os.path.exists(model_info_path):
+                with open(model_info_path, 'r') as f:
+                    metadata = json.load(f)
+
+        # Get model files from hash
         if metadata:
-            # Look for model files in the models directory based on hash info
             models_dir = config.get('models_directory')
             if models_dir and os.path.exists(models_dir):
                 hash_file = os.path.join(model_path, f'{model_name}_hash.json')
                 if os.path.exists(hash_file):
-                    try:
-                        with open(hash_file, 'r') as f:
-                            hash_data = json.load(f)
-                            filename = hash_data.get('filename', '')
-                            if filename:
-                                # Search for the file in models directory
-                                for root, dirs, files in os.walk(models_dir):
-                                    if filename in files:
-                                        rel_path = os.path.relpath(os.path.join(root, filename), models_dir)
-                                        model_files.append(rel_path)
-                                        break
-                    except Exception as e:
-                        print(f"Error reading hash file: {e}")
-                        
+                    with open(hash_file, 'r') as f:
+                        hash_data = json.load(f)
+                        filename = hash_data.get('filename', '')
+                        if filename:
+                            for root, dirs, files in os.walk(models_dir):
+                                if filename in files:
+                                    rel_path = os.path.relpath(os.path.join(root, filename), models_dir)
+                                    model_files.append(rel_path)
+                                    break
+
     except Exception as e:
-        print(f"Error reading model details: {e}")
-    
-    return render_template('model_detail.html', 
-                         model_name=model_name, 
-                         model_files=model_files, 
+        print(f"Error reading model details for {model_name}: {e}")
+
+    return render_template('model_detail.html',
+                         model_name=model_name,
+                         model_files=model_files,
                          metadata=metadata)
 
-@app.route('/static/<path:filename>')
-def static_files(filename):
+@app.route('/local_static/<path:filename>')
+def local_static_files(filename):
     """Serve static files from the output directory"""
     config = load_web_config()
     output_dir = config.get('output_directory')
-    
+
+    print(f"DEBUG: Attempting to serve static file: {filename} from output_dir: {output_dir}")
+
     if not output_dir:
+        print("DEBUG: Error: output_dir not configured for static files.")
         return '', 404
-    
-    return send_from_directory(output_dir, filename)
+
+    try:
+        full_path = os.path.join(output_dir, filename)
+        print(f"DEBUG: send_from_directory attempting to serve: {full_path}")
+        return send_from_directory(output_dir, filename)
+    except Exception as e:
+        print(f"DEBUG: Error serving file {filename} from {output_dir}: {e}")
+        return '', 404
 
 @app.route('/api/models')
 def api_models():
