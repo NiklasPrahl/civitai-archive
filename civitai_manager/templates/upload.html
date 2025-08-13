@@ -17,29 +17,48 @@
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card shadow-sm">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-cloud-upload-alt me-2"></i>
-                    Upload New Model
-                </h5>
-            </div>
-            <div class="card-body">
-                <div id="uploadContentWrapper">
-                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+            <div class="card-body p-5">
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div id="uploadFormContent">
                         {{ form.hidden_tag() }}
-                        
                         <div class="mb-4">
-                            <label for="{{ form.model_file.id }}" class="form-label">
-                                <i class="fas fa-file me-1"></i>
-                                Select Model File
-                            </label>
-                            <div class="input-group">
-                                {{ form.model_file(class="form-control", accept=".safetensors,.ckpt,.pt,.pth,.bin") }}
-                                <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('{{ form.model_file.id }}').click()">
-                                    <i class="fas fa-folder-open"></i>
-                                </button>
+                            <div class="upload-area p-5 text-center border rounded bg-light mb-3">
+                                <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
+                                <h5 class="text-muted mb-3">Drag and drop your model file here</h5>
+                                <p class="text-muted small mb-3">or</p>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('{{ form.model_file.id }}').click()">
+                                        <i class="fas fa-folder-open me-2"></i>
+                                        Browse Files
+                                    </button>
+                                    {{ form.model_file(class="d-none", accept=".safetensors,.ckpt,.pt,.pth,.bin") }}
+                                </div>
                             </div>
-                            
+                            <!-- File Info -->
+                            <div id="fileInfo" class="card my-4 d-none shadow-sm">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-file-info me-2"></i>
+                                        File Information
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p><strong>Filename:</strong> <span id="fileName"></span></p>
+                                            <p><strong>File Size:</strong> <span id="fileSize"></span></p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <p><strong>File Type:</strong> <span id="fileType"></span></p>
+                                            <p><strong>Last Modified:</strong> <span id="fileModified"></span></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 py-2" id="uploadButton" disabled>
+                                <i class="fas fa-upload me-2"></i>
+                                Upload Model
+                            </button>
                             {% if form.model_file.errors %}
                                 <div class="invalid-feedback d-block">
                                     {% for error in form.model_file.errors %}
@@ -48,148 +67,106 @@
                                 </div>
                             {% endif %}
                         </div>
+                        <div class="d-flex align-items-center">
+                            <button class="btn btn-link text-muted p-0 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#uploadProcessCollapse" aria-expanded="false" aria-controls="uploadProcessCollapse">
+                                <small>
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Upload Process Details
+                                    <i class="fas fa-chevron-down ms-1 small collapse-arrow"></i>
+                                </small>
+                            </button>
+                            <div class="ms-auto">
+                                <a href="#" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#helpModal">
+                                    <i class="fas fa-question-circle me-2"></i>
+                                    Help
+                                </a>
+                            </div>
+                        </div>
+                        <div class="collapse mt-2" id="uploadProcessCollapse">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body p-4">
+                                    <div class="row g-4">
+                                        <div class="col-md-6">
+                                            <div class="d-flex align-items-start">
+                                                <div class="process-step">
+                                                    <i class="fas fa-save text-primary opacity-75"></i>
+                                                    <div class="ms-3">
+                                                        <p class="mb-1 fw-medium">File is saved</p>
+                                                        <small class="text-muted">In the configured models directory</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-start mt-4">
+                                                <div class="process-step">
+                                                    <i class="fas fa-cogs text-primary opacity-75"></i>
+                                                    <div class="ms-3">
+                                                        <p class="mb-1 fw-medium">Processing starts</p>
+                                                        <small class="text-muted">Automatic processing after upload</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-start mt-4">
+                                                <div class="process-step">
+                                                    <i class="fas fa-database text-primary opacity-75"></i>
+                                                    <div class="ms-3">
+                                                        <p class="mb-1 fw-medium">Metadata retrieval</p>
+                                                        <small class="text-muted">From Civitai via file hash</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="d-flex align-items-start">
+                                                <div class="process-step">
+                                                    <i class="fas fa-images text-primary opacity-75"></i>
+                                                    <div class="ms-3">
+                                                        <p class="mb-1 fw-medium">Preview images</p>
+                                                        <small class="text-muted">Downloaded per configuration</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-start mt-4">
+                                                <div class="process-step">
+                                                    <i class="fas fa-code text-primary opacity-75"></i>
+                                                    <div class="ms-3">
+                                                        <p class="mb-1 fw-medium">Overview update</p>
+                                                        <small class="text-muted">HTML updates automatically</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
 
-                        <div class="mb-4 text-center border rounded p-4" id="dropArea">
-                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">Drag & Drop your model file here</p>
-                            <input type="file" id="hiddenFileInput" style="display: none;" accept=".safetensors,.ckpt,.pt,.pth,.bin">
-                        </div>
-                        
-                        <div class="mb-4">
-                            <p>
-                                <button class="btn btn-link p-0" type="button" data-bs-toggle="collapse" data-bs-target="#uploadProcessCollapse" aria-expanded="false" aria-controls="uploadProcessCollapse">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    What happens during upload?
-                                    <i class="fas fa-chevron-right ms-2 collapse-arrow"></i>
-                                </button>
-                            </p>
-                            <div class="collapse" id="uploadProcessCollapse">
-                                <div class="card card-body">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="d-flex align-items-start mb-2">
-                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                                <div>
-                                                    <strong>File is saved</strong><br>
-                                                    <small class="text-muted">In the configured models directory</small>
-                                                </div>
-                                            </div>
-                                            <div class="d-flex align-items-start mb-2">
-                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                                <div>
-                                                    <strong>Automatic processing starts</strong><br>
-                                                    <small class="text-muted">Model is processed immediately after upload</small>
-                                                </div>
-                                            </div>
-                                            <div class="d-flex align-items-start mb-2">
-                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                                <div>
-                                                    <strong>Metadata is retrieved</strong><br>
-                                                    <small class="text-muted">From Civitai based on file hash</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="d-flex align-items-start mb-2">
-                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                                <div>
-                                                    <strong>Preview images are downloaded</strong><br>
-                                                    <small class="text-muted">Based on your configuration</small>
-                                                </div>
-                                            </div>
-                                            <div class="d-flex align-items-start mb-2">
-                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                                <div>
-                                                    <strong>HTML overview is updated</strong><br>
-                                                    <small class="text-muted">Automatically after processing</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                <!-- Progress States Container -->
+                <div id="uploadProgress" class="d-none">
+                    <!-- Upload State -->
+                    <div class="upload-state">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-cloud-upload-alt fa-2x text-primary me-3"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h5 class="mb-1" id="progressTitle">Uploading Model</h5>
+                                <div id="progressText" class="text-muted small">Preparing upload...</div>
                             </div>
                         </div>
-                        
-                        <!-- File Info -->
-                        <div id="fileInfo" class="card my-4 d-none shadow-sm">
-                            <div class="card-header">
-                                <h5 class="mb-0">
-                                    <i class="fas fa-file-info me-2"></i>
-                                    File Information
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <p><strong>Filename:</strong> <span id="fileName"></span></p>
-                                        <p><strong>File Size:</strong> <span id="fileSize"></span></p>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <p><strong>File Type:</strong> <span id="fileType"></span></p>
-                                        <p><strong>Last Modified:</strong> <span id="fileModified"></span></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="d-grid gap-2">
-                            {{ form.submit(class="btn btn-primary btn-lg", id="submitBtn") }}
-                        </div>
-                    </form>
-                    
-                    <!-- Upload Progress - Integrated into card-body -->
-                    <div id="uploadProgress" class="d-none p-3">
-                        <h5 class="mb-3 text-center">
-                            <i class="fas fa-spinner fa-spin me-2"></i>
-                            Upload in Progress...
-                        </h5>
-                        <div class="progress mb-3">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                        <div class="progress mb-2" style="height: 20px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary position-relative" 
                                  role="progressbar" style="width: 0%" id="progressBar">
-                                0%
+                                <span class="position-absolute w-100 text-center" style="left: 0; line-height: 20px;">0%</span>
                             </div>
                         </div>
-                        <div id="progressText" class="text-muted text-center">
-                            Preparing upload...
-                        </div>
+                        <div class="text-end text-muted small" id="uploadStats"></div>
                     </div>
+                </div>
 
-                    <!-- New Success Message Div -->
-                    <div id="uploadSuccessMessage" class="d-none p-3 text-center">
-                        <h5 class="mb-3 text-success">
-                            <i class="fas fa-check-circle me-2"></i>
-                            Upload and Processing Complete!
-                        </h5>
-                        <p>Your model has been successfully uploaded and processed. You will be redirected to the dashboard shortly.</p>
-                        <div class="spinner-border text-success" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>
-                </div>
             </div>
-        </div>
-        
-        <!-- Upload Progress -->
-        <div id="uploadProgress" class="card mt-4 d-none">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-spinner fa-spin me-2"></i>
-                    Upload in Progress...
-                </h5>
             </div>
-            <div class="card-body">
-                <div class="progress mb-3">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" style="width: 0%" id="progressBar">
-                        0%
-                    </div>
-                </div>
-                <div id="progressText" class="text-muted">
-                    Preparing upload...
-                </div>
-            </div>
-        </div>
-        
         <!-- Help & Tips Button -->
         <div class="text-center mt-4">
             <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#helpModal">
@@ -209,6 +186,33 @@
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
+    <script>
+        // Enable upload button when a file is selected
+        document.getElementById('{{ form.model_file.id }}').addEventListener('change', function() {
+            document.getElementById('uploadButton').disabled = !this.files.length;
+        });
+
+        // Enable upload button when a file is dropped
+        const uploadArea = document.querySelector('.upload-area');
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('drag-over');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('drag-over');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+            const fileInput = document.getElementById('{{ form.model_file.id }}');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                document.getElementById('uploadButton').disabled = false;
+            }
+        });
+    </script>
                     <div class="modal-body">
                         <div class="row">
                             <div class="col-md-6">
@@ -255,18 +259,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const fileSize = document.getElementById('fileSize');
     const fileType = document.getElementById('fileType');
     const fileModified = document.getElementById('fileModified');
-    const uploadForm = document.getElementById('uploadForm'); // The form itself
+    const form = document.getElementById('uploadForm');
     const uploadProgress = document.getElementById('uploadProgress');
     const progressBar = document.getElementById('progressBar');
+    const progressTitle = document.getElementById('progressTitle');
     const progressText = document.getElementById('progressText');
-    const submitBtn = document.getElementById('submitBtn');
-    const uploadSuccessMessage = document.getElementById('uploadSuccessMessage'); // New element
-    const uploadContentWrapper = document.getElementById('uploadContentWrapper'); // New element
+    const uploadStats = document.getElementById('uploadStats');
+    const uploadButton = document.getElementById('uploadButton');
 
     // Initially hide progress and success messages
     uploadProgress.classList.add('d-none');
-    uploadSuccessMessage.classList.add('d-none');
-    uploadForm.classList.remove('d-none'); // Ensure form is visible initially
 
     // Show file info when file is selected
     fileInput.addEventListener('change', function() {
@@ -293,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Handle form submission with progress
-    uploadForm.addEventListener('submit', function(e) {
+    form.addEventListener('submit', function(e) {
         e.preventDefault();
         console.log('DEBUG: Upload form submitted.');
         
@@ -301,27 +303,60 @@ document.addEventListener('DOMContentLoaded', function() {
         const xhr = new XMLHttpRequest();
         
         // Hide the form and show progress
-        uploadForm.classList.add('d-none');
-        uploadProgress.classList.remove('d-none');
-        uploadSuccessMessage.classList.add('d-none'); // Ensure success message is hidden
+    document.getElementById('uploadFormContent').classList.add('d-none');
+    uploadProgress.classList.remove('d-none');
         
-        submitBtn.disabled = true; // This button is now hidden, but good practice to disable
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Upload in progress...';
+        uploadButton.disabled = true;
+        uploadButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Upload in progress...';
         
-        // Progress tracking
+        // Track upload start time
+        const startTime = Date.now();
+        
         xhr.upload.addEventListener('progress', function(e) {
             if (e.lengthComputable) {
                 const percentComplete = (e.loaded / e.total) * 100;
-                progressBar.style.width = percentComplete + '%';
-                progressBar.textContent = Math.round(percentComplete) + '%';
+                const roundedPercent = Math.round(percentComplete);
                 
-                if (percentComplete < 100) {
-                    progressText.textContent = 'Uploading file...';
-                } else {
-                    progressText.textContent = 'File uploaded, server is processing...';
+                // Update progress bar
+                progressBar.style.width = percentComplete + '%';
+                progressBar.querySelector('span').textContent = roundedPercent + '%';
+                
+                // Update progress information
+                const uploadSpeed = calculateSpeed(e.loaded, Date.now() - startTime);
+                const timeRemaining = estimateTimeRemaining(e.loaded, e.total, startTime);
+                
+                const progressTitle = document.getElementById('progressTitle');
+                const progressText = document.getElementById('progressText');
+                const uploadStats = document.getElementById('uploadStats');
+                
+                progressTitle.textContent = 'Uploading Model';
+                progressText.textContent = 'Transferring file to server...';
+                uploadStats.textContent = `${formatFileSize(e.loaded)} of ${formatFileSize(e.total)} • ${uploadSpeed} • ${timeRemaining}`;
+                
+                if (percentComplete === 100) {
+                    progressTitle.textContent = 'Processing Model';
+                    progressText.textContent = 'Upload complete, processing on server...';
+                    uploadStats.textContent = 'This may take a few moments...';
                 }
             }
         });
+        
+        // Helper functions for progress calculations
+        function calculateSpeed(loaded, timeElapsed) {
+            const speedBps = loaded / (timeElapsed / 1000);
+            return formatFileSize(speedBps) + '/s';
+        }
+        
+        function estimateTimeRemaining(loaded, total, startTime) {
+            const timeElapsed = Date.now() - startTime;
+            const timeRemaining = (timeElapsed * (total / loaded - 1)) / 1000;
+            
+            if (timeRemaining < 60) {
+                return Math.round(timeRemaining) + ' seconds left';
+            } else {
+                return Math.round(timeRemaining / 60) + ' minutes left';
+            }
+        }
         
         // Handle completion
         xhr.addEventListener('load', function() {
@@ -331,8 +366,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('DEBUG: Server response:', response);
                 if (response.success) {
                     progressText.textContent = response.message;
-                    progressBar.classList.remove('progress-bar-animated');
-                    
+                    progressBar.classList.remove('progress-bar-animated', 'bg-danger');
                     // Poll for processing status
                     console.log('DEBUG: Starting polling for processing status...');
                     const interval = setInterval(() => {
@@ -342,44 +376,68 @@ document.addEventListener('DOMContentLoaded', function() {
                                 console.log('DEBUG: Polling status:', data.is_processing);
                                 if (!data.is_processing) {
                                     clearInterval(interval);
-                                    uploadProgress.classList.add('d-none'); // Hide progress bar
-                                    uploadSuccessMessage.classList.remove('d-none'); // Show success message
-                                    
-                                    console.log('DEBUG: Processing complete, redirecting to index.');
-                                    setTimeout(() => {
-                                        window.location.href = '{{ url_for("index") }}';
-                                    }, 2000); // Give user a moment to see success message
+                                        clearInterval(interval);
+                                        progressTitle.textContent = 'Fertig!';
+                                        progressText.textContent = 'Das Modell wurde verarbeitet.';
+                                        setTimeout(() => {
+                                            // Progress-Bar ausblenden, Formular wieder anzeigen, Felder zurücksetzen
+                                            uploadProgress.classList.add('d-none');
+                                            form.reset();
+                                            fileInfo.classList.add('d-none');
+                                            progressBar.style.width = '0%';
+                                            progressBar.classList.remove('bg-success', 'bg-danger');
+                                            progressBar.classList.add('progress-bar-animated', 'bg-primary');
+                                            progressBar.querySelector('span').textContent = '0%';
+                                            progressTitle.textContent = 'Uploading Model';
+                                            progressText.textContent = 'Preparing upload...';
+                                            uploadStats.textContent = '';
+                                            document.getElementById('uploadFormContent').classList.remove('d-none');
+                                            uploadButton.disabled = true;
+                                            uploadButton.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Model';
+                                        }, 2000);
                                 } else {
-                                    progressText.textContent = 'Processing... please wait.';
+                                    progressTitle.textContent = 'Processing Model';
+                                    progressBar.style.width = '100%';
+                                    progressBar.querySelector('span').textContent = '100%';
+                                    progressText.textContent = 'Processing model files and retrieving metadata...';
+                                    uploadStats.textContent = 'This may take a few moments...';
                                 }
                             })
                             .catch(error => {
                                 console.error('ERROR: Polling failed:', error);
                                 clearInterval(interval);
-                                progressText.textContent = 'Error checking processing status.';
+                                progressText.innerHTML = '<div class="alert alert-danger mt-2">Error checking processing status.</div>';
                                 progressBar.classList.add('bg-danger');
-                                uploadProgress.classList.remove('d-none'); // Keep progress visible for error
-                                uploadForm.classList.add('d-none'); // Keep form hidden
+                                uploadProgress.classList.remove('d-none');
+                                uploadForm.classList.add('d-none');
                             });
                     }, 2000);
                 } else {
                     // Server reported failure
-                    progressText.textContent = response.message || 'Upload error!';
                     progressBar.classList.add('bg-danger');
-                    uploadProgress.classList.remove('d-none'); // Keep progress visible for error
-                    uploadForm.classList.remove('d-none'); // Show form again on error
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '{{ form.submit.label.text }}';
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.width = '100%';
+                    progressBar.querySelector('span').textContent = 'Error';
+                    progressText.innerHTML = `<div class="alert alert-danger mt-2">${response.message || 'Upload error!'}</div>`;
+                    uploadStats.textContent = '';
+                    uploadProgress.classList.remove('d-none');
+                    uploadForm.classList.remove('d-none');
+                    uploadButton.disabled = false;
+                    uploadButton.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Model';
                     console.error('ERROR: Server reported upload failure:', response.message);
                 }
             } else {
                 // HTTP status not 200
-                progressText.textContent = 'Upload error! Server responded with status ' + xhr.status;
                 progressBar.classList.add('bg-danger');
-                uploadProgress.classList.remove('d-none'); // Keep progress visible for error
-                uploadForm.classList.remove('d-none'); // Show form again on error
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '{{ form.submit.label.text }}';
+                progressBar.classList.remove('progress-bar-animated');
+                progressBar.style.width = '100%';
+                progressBar.querySelector('span').textContent = 'Error';
+                progressText.innerHTML = '<div class="alert alert-danger mt-2">Upload error! Server responded with status ' + xhr.status + '</div>';
+                uploadStats.textContent = '';
+                uploadProgress.classList.remove('d-none');
+                uploadForm.classList.remove('d-none');
+                uploadButton.disabled = false;
+                uploadButton.innerHTML = 'Upload Model';
                 console.error('ERROR: XHR status not 200. Status:', xhr.status);
             }
         });
@@ -390,8 +448,8 @@ document.addEventListener('DOMContentLoaded', function() {
             progressBar.classList.add('bg-danger');
             uploadProgress.classList.remove('d-none'); // Keep progress visible for error
             uploadForm.classList.remove('d-none'); // Show form again on error
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '{{ form.submit.label.text }}';
+            uploadButton.disabled = false;
+            uploadButton.innerHTML = 'Upload Model';
             console.error('ERROR: XHR network error.');
         });
         
@@ -423,14 +481,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Drag and Drop functionality
-    const dropArea = document.getElementById('dropArea');
-    const hiddenFileInput = document.getElementById('hiddenFileInput');
-    const browseFiles = document.getElementById('browseFiles');
+    const dropArea = document.querySelector('.upload-area');
 
     // Prevent default drag behaviors
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropArea.addEventListener(eventName, preventDefaults, false);
-        document.body.addEventListener(eventName, preventDefaults, false); // Prevent default for entire body
+        document.body.addEventListener(eventName, preventDefaults, false);
     });
 
     // Highlight drop area when item is dragged over it
@@ -444,20 +500,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle dropped files
     dropArea.addEventListener('drop', handleDrop, false);
-
-    // Handle browse link click
-    browseFiles.addEventListener('click', function(e) {
-        e.preventDefault();
-        hiddenFileInput.click();
-    });
-
-    // Handle file selection from hidden input
-    hiddenFileInput.addEventListener('change', function() {
-        if (this.files.length > 0) {
-            fileInput.files = this.files; // Assign files to the original form input
-            fileInput.dispatchEvent(new Event('change')); // Trigger change event
-        }
-    });
 
     function preventDefaults (e) {
         e.preventDefault();
