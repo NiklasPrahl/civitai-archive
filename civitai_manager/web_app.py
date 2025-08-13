@@ -7,27 +7,26 @@ from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms import StringField, BooleanField, SubmitField, TextAreaField
-from wtforms.validators import DataRequired, Optional
+from wtforms import StringField, BooleanField, SubmitField
+from wtforms.validators import DataRequired
 from werkzeug.utils import secure_filename
 import threading
 import time
 
 from civitai_manager.src.core.metadata_manager import (
     process_single_file,
-    process_directory,
-    clean_output_directory,
-    generate_image_json_files,
-    get_output_path,
-    calculate_sha256
+    process_directory
 )
 from civitai_manager.src.utils.web_helpers import find_model_file_path, load_web_config, save_web_config
 from civitai_manager.src.utils.html_generators.browser_page import generate_global_summary
-from civitai_manager.src.utils.config import load_config, ConfigValidationError
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
+
+# Global variable to hold the processing thread and a cancellation flag
+processing_thread = None
+cancel_processing_flag = threading.Event()
 
 # Global configuration
 CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json')) # Adjusted path
@@ -57,39 +56,7 @@ def allowed_file(filename):
 
 
 
-def load_web_config():
-    """Load configuration for web interface"""
-    try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-                
-                # Ensure all required fields exist with defaults
-                if 'models_directory' not in config:
-                    config['models_directory'] = ''
-                if 'output_directory' not in config:
-                    config['output_directory'] = ''
-                if 'download_all_images' not in config:
-                    config['download_all_images'] = False
-                if 'notimeout' not in config:
-                    config['notimeout'] = False
-                if 'skip_images' not in config:
-                    config['skip_images'] = False
-                
-                return config
-    except Exception as e:
-        print(f"DEBUG: Error loading config: {e}")
-    return {}
 
-def save_web_config(config):
-    """Save configuration for web interface"""
-    try:
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config, f, indent=2)
-        return True
-    except Exception as e:
-        print(f"Error saving config: {e}")
-        return False
 
 def get_models_info():
     """Get information about all models for the dashboard."""
@@ -123,7 +90,7 @@ def get_models_info():
                     model['has_images'] = False
 
             return models
-        except Exception as e:
+        except Exception:
             # Fallback to direct scan if summary file fails
             pass
 
@@ -290,12 +257,15 @@ def upload():
 @app.route('/process-all')
 def process_all():
     """Process all models in the configured directory"""
+    global processing_thread, cancel_processing_flag
     config = load_web_config()
     
     if not config.get('models_directory') or not config.get('output_directory'):
         return jsonify({'error': 'Configuration not set'}), 400
     
-    def process_all_models():
+    def process_all_models_task(): # Renamed to avoid conflict with outer function
+        global processing_thread, cancel_processing_flag
+        cancel_processing_flag.clear() # Clear the flag at the start of a new process
         try:
             models_dir = Path(config['models_directory'])
             output_dir = Path(config['output_directory'])
@@ -305,21 +275,46 @@ def process_all():
                 output_dir,
                 config.get('notimeout', False),
                 download_all_images=config.get('download_all_images', False),
-                skip_images=config.get('skip_images', False)
+                skip_images=config.get('skip_images', False),
+                cancel_flag=cancel_processing_flag # Pass the flag
             )
-            generate_global_summary(output_dir, models_dir)
+            # Ensure thread is cleared and flag reset immediately after processing
+            processing_thread = None
+            cancel_processing_flag.clear()
+
+            if not cancel_processing_flag.is_set(): # Only generate summary if not cancelled
+                generate_global_summary(output_dir, models_dir)
         except Exception as e:
             print(f"Error processing all models: {e}")
+        finally:
+            processing_thread = None # Clear the thread reference when done
+            cancel_processing_flag.clear() # Clear the flag
     
-    thread = threading.Thread(target=process_all_models)
-    thread.daemon = True
-    thread.start()
+    if processing_thread and processing_thread.is_alive():
+        return jsonify({'message': 'Processing already in progress'}), 409
+
+    processing_thread = threading.Thread(target=process_all_models_task)
+    processing_thread.daemon = True
+    processing_thread.start()
     
     return jsonify({'message': 'Processing started'})
+
+@app.route('/cancel-processing')
+def cancel_processing():
+    global processing_thread, cancel_processing_flag
+    if processing_thread and processing_thread.is_alive():
+        cancel_processing_flag.set() # Set the flag to signal cancellation
+        return jsonify({'message': 'Cancellation requested'})
+    else:
+        return jsonify({'message': 'No active processing to cancel'}), 400
+
 
 @app.route('/model/<model_name>')
 def model_detail(model_name):
     """Show detailed information about a specific model"""
+    start_time = time.time()
+    print(f"DEBUG: Entering model_detail for {model_name} at {start_time}")
+
     config = load_web_config()
     output_dir = config.get('output_directory')
 
@@ -336,6 +331,8 @@ def model_detail(model_name):
     model_files = []
 
     try:
+        # Load model metadata
+        load_metadata_start = time.time()
         model_metadata_path = os.path.join(model_path, f'{model_name}_civitai_model.json')
         if os.path.exists(model_metadata_path):
             try:
@@ -347,8 +344,10 @@ def model_detail(model_name):
             except Exception as e:
                 print(f"ERROR: Unexpected error when loading model metadata from {model_metadata_path}: {e}")
                 metadata = {} # Ensure metadata is empty on error
+        print(f"DEBUG: Loaded model metadata in {time.time() - load_metadata_start:.4f} seconds")
 
-
+        # Load version metadata
+        load_version_start = time.time()
         version_metadata_path = os.path.join(model_path, f'{model_name}_civitai_model_version.json')
         if os.path.exists(version_metadata_path):
             try:
@@ -360,6 +359,7 @@ def model_detail(model_name):
             except Exception as e:
                 print(f"ERROR: Unexpected error when loading version metadata from {version_metadata_path}: {e}")
                 version_data = {} # Ensure version_data is empty on error
+        print(f"DEBUG: Loaded version metadata in {time.time() - load_version_start:.4f} seconds")
         
         if metadata and 'modelVersions' in metadata and version_data:
             version_id = version_data.get('id')
@@ -370,6 +370,8 @@ def model_detail(model_name):
                     version_data = temp_version
                     break
 
+        # Process images
+        process_images_start = time.time()
         if version_data.get('images'):
             for i, image_data in enumerate(version_data['images']):
                 if image_data.get('type') == 'video':
@@ -385,32 +387,52 @@ def model_detail(model_name):
                     version_data['images'][i]['local_url'] = url_for('local_static_files', filename=image_filename)
                 else:
                     version_data['images'][i]['local_url'] = url_for('static', filename='placeholder.png')
+        print(f"DEBUG: Processed images in {time.time() - process_images_start:.4f} seconds")
 
+        # Fallback for metadata
         if not metadata:
+            fallback_metadata_start = time.time()
             model_info_path = os.path.join(model_path, 'model_info.json')
             if os.path.exists(model_info_path):
                 with open(model_info_path, 'r') as f:
                     metadata = json.load(f)
+            print(f"DEBUG: Loaded fallback metadata in {time.time() - fallback_metadata_start:.4f} seconds")
 
+        # Find model files
+        find_files_start = time.time()
         if version_data:
             models_dir = config.get('models_directory')
             file_info = version_data.get('files', [])
             if models_dir and os.path.exists(models_dir) and file_info:
                 stored_hash = file_info[0].get('hashes', {}).get('SHA256')
-                stored_filename = file_info[0].get('name')
+                stored_filename = file_info[0].get('name') # This is the original filename, e.g., 'flux_dev.safetensors'
+
                 if stored_hash and stored_filename:
-                    rel_path = find_model_file_path(models_dir, stored_hash, stored_filename)
-                    if rel_path:
-                        model_files.append(rel_path)
+                    expected_path = os.path.join(models_dir, stored_filename)
+                    if os.path.exists(expected_path): # Only check for existence, trust the hash from _hash.json
+                        model_files.append(os.path.relpath(expected_path, models_dir))
+                    # No fallback to find_model_file_path here, as it's slow and we have the filename
+        print(f"DEBUG: Found model files in {time.time() - find_files_start:.4f} seconds")
 
     except Exception as e:
         print(f"Error reading model details for {model_name}: {e}")
+
+    print(f"DEBUG: Rendering model_detail.html for {model_name}. Total time: {time.time() - start_time:.4f} seconds")
+
+    likes_fill_width = 0
+    if version_data and version_data.get('stats'):
+        thumbs_up = version_data['stats'].get('thumbsUpCount', 0)
+        thumbs_down = version_data['stats'].get('thumbsDownCount', 0)
+        total_votes = thumbs_up + thumbs_down
+        if total_votes > 0:
+            likes_fill_width = (thumbs_up / total_votes) * 100
 
     return render_template('model_detail.html',
                          model_name=model_name,
                          model_files=model_files,
                          metadata=metadata,
-                         version=version_data)
+                         version=version_data,
+                         likes_fill_width=likes_fill_width)
 
 @app.route('/local_static/<path:filename>')
 def local_static_files(filename):

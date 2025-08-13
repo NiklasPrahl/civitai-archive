@@ -14,7 +14,7 @@ class ProcessedFilesManager:
             try:
                 with open(self.processed_file, 'r') as f:
                     return json.load(f)
-            except:
+            except (FileNotFoundError, json.JSONDecodeError):
                 return {'files': [], 'last_update': None}
         return {'files': [], 'last_update': None}
 

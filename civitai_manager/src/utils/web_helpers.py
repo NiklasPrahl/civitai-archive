@@ -1,6 +1,6 @@
 import os
 import json
-from pathlib import Path
+
 from civitai_manager.src.utils.string_utils import calculate_sha256
 
 CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'config.json')) # Adjusted path

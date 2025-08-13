@@ -10,13 +10,13 @@
     </h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
-            <button type="button" class="btn btn-primary" onclick="processAllModels()">
+            <button type="button" class="btn btn-secondary" onclick="processAllModels()">
                 <i class="fas fa-sync-alt me-1"></i>
                 Process All Models
             </button>
         </div>
         
-        <a href="{{ url_for('upload') }}" class="btn btn-success">
+        <a href="{{ url_for('upload') }}" class="btn btn-primary">
             <i class="fas fa-plus me-1"></i>
             New Model
         </a>
@@ -26,7 +26,7 @@
 
 
 <!-- Models Overview -->
-<div class="card">
+<div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
             <i class="fas fa-brain me-2"></i>
@@ -116,7 +116,7 @@
                 {% for model in models %}
                 <div class="col-md-4 mb-4">
                     <div class="card h-100 shadow-sm">
-                        <img src="{{ model.preview_image_url }}" class="card-img-top" alt="{{ model.title }}" style="height: 200px; object-fit: cover;" onerror="this.onerror=null;this.src=&quot;{{ url_for('local_static_files', filename='img/placeholder.png') }}&quot;;">
+                        <img src="{{ model.preview_image_url }}" class="card-img-top" alt="{{ model.title }}" style="height: 200px; object-fit: cover;" onerror="handleImageError(this)">
                         <div class="card-body d-flex flex-column">
                             <h5 class="card-title text-truncate mb-1" title="{{ model.title }}">{{ model.title }}</h5>
                             <h6 class="card-subtitle mb-2 text-muted text-truncate">by {{ model.author }}</h6>
@@ -162,18 +162,20 @@
 </div>
 
 <!-- Processing Status -->
-<div id="processingStatus" class="alert alert-info d-none" role="alert">
+<div id="processingStatus" class="alert alert-info d-none mb-3" role="alert">
     <i class="fas fa-spinner fa-spin me-2"></i>
     <span id="processingMessage">Processing all models...</span>
+    <button type="button" class="btn btn-sm btn-outline-danger ms-3" id="cancelProcessingBtn">Cancel</button>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function handleImageError(imgElement) {
+  1
+    imgElement.onerror = null; // Prevent infinite loop if placeholder also fails
+}
 function processAllModels() {
-    if (!confirm('Do you really want to process all models? This may take some time.')) {
-        return;
-    }
     
     const statusDiv = document.getElementById('processingStatus');
     const messageSpan = document.getElementById('processingMessage');
@@ -321,6 +323,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Run on load and resize
     adjustTagsDisplay();
     window.addEventListener('resize', adjustTagsDisplay);
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const cancelBtn = document.getElementById('cancelProcessingBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            fetch('/cancel-processing')
+                    .then(response => response.json())
+                    .then(data => {
+                        const statusDiv = document.getElementById('processingStatus');
+                        const messageSpan = document.getElementById('processingMessage');
+                        statusDiv.classList.add('d-none'); // Hide the processing status
+                        messageSpan.textContent = data.message; // Update message
+                        // Optionally, you might want to show a temporary success message elsewhere
+                    })
+                    .catch(error => {
+                        console.error('Error cancelling processing:', error);
+                        alert('Error cancelling processing.');
+                    });
+        });
+    }
 });
 </script>
 {% endblock %} 

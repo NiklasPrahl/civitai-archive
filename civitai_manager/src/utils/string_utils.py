@@ -1,4 +1,5 @@
 import re
+import hashlib
 
 def sanitize_filename(filename):
     """
@@ -26,7 +27,7 @@ def sanitize_filename(filename):
     
     return sanitized
 
-import hashlib
+
 
 def calculate_sha256(file_path, buffer_size=65536):
     """Calculate SHA256 hash of a file"""

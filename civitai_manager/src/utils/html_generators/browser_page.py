@@ -5,7 +5,7 @@ from ..string_utils import sanitize_filename
 import json
 from datetime import datetime
 from civitai_manager import __version__
-from civitai_manager.src.utils.web_helpers import find_model_file_path, load_web_config
+from civitai_manager.src.utils.web_helpers import find_model_file_path
 
 def generate_global_summary(output_dir, models_dir):
     """
@@ -42,7 +42,7 @@ def generate_global_summary(output_dir, models_dir):
                 base_name = model_file.parent.name
                 version_file = model_file.parent / f"{base_name}_civitai_model_version.json"
                 hash_file = model_file.parent / f"{base_name}_hash.json"
-                html_file = model_file.parent / f"{base_name}.html"
+                
         
                 # Read all files
                 with open(model_file, 'r', encoding='utf-8') as f:
@@ -66,7 +66,7 @@ def generate_global_summary(output_dir, models_dir):
                 model_entry = {
                     # Add model data
                     'name': model_data.get('name') or 'Unknown',
-                    'creator': model_data.get('creator', {}).get('username', 'Unknown'),
+                    'author': model_data.get('creator', {}).get('username', 'Unknown'),
                     'base_name': base_name,
                     'html_file': f"{base_name}.html",
                     'tags': model_data.get('tags', []),
@@ -74,7 +74,7 @@ def generate_global_summary(output_dir, models_dir):
                     # Add version data
                     'version_name': version_data.get('name', ''),
                     'downloads': version_data.get('stats', {}).get('downloadCount', 0),
-                    'has_html': html_file.exists(),
+                    'has_html': (Path(output_dir) / base_name / f"{base_name}.html").exists(),
                     'added_date': hash_data.get('timestamp', ''),
                     'file_size': version_data.get('files', [{}])[0].get('sizeKB', None),
                     'files': [] # Initialize files list
@@ -135,7 +135,7 @@ def generate_global_summary(output_dir, models_dir):
             model_cards = []
             for model in models:
                 sanitized_base = sanitize_filename(model["base_name"])
-                html_name = f"{sanitized_base}.html"
+                
                 model_name = (
                     f'<a href="/model/{sanitized_base}">{html.escape(model["name"])}</a>'
                     if model.get('has_html', False) or not model.get('missing')
@@ -173,7 +173,7 @@ def generate_global_summary(output_dir, models_dir):
                     <div class="model-card{' missing' if model.get('missing') else ''}{' processed' if model.get('has_html') else ''}" 
                     data-tags="{','.join(model['tags']).lower()}"
                     data-name="{(model['name'] or '').lower()}"
-                    data-creator="{(model['creator'] or '').lower()}"
+                    data-author="{(model['author'] or '').lower()}"
                     data-downloads="{model['downloads']}"
                     data-filename="{model['base_name'].lower()}"
                     data-raw-size="{model.get('file_size', 0)}"
@@ -181,7 +181,7 @@ def generate_global_summary(output_dir, models_dir):
                         <img class="model-cover" src="{preview_path}" onerror="if (this.src.includes('preview_0')) {{ this.src = this.src.replace('preview_0', 'preview_1'); }} else {{ this.style.display='none'; }}" loading="lazy">
                         <h3>{model_name}</h3>
                         <small class="version-name">{model.get('version_name', '')}</small>
-                        <div>by {model['creator']}</div>
+                        <div>by {model['author']}</div>
                         {base_model_section}
                         {downloads_section}
                         {filesize_section}

@@ -4,7 +4,7 @@ import os
 import sys
 import argparse
 from pathlib import Path
-from civitai_manager import __version__
+
 from civitai_manager.src.core.metadata_manager import (
     process_single_file,
     process_directory,
@@ -13,7 +13,7 @@ from civitai_manager.src.core.metadata_manager import (
     get_output_path
 )
 from civitai_manager.src.utils.html_generators.browser_page import generate_global_summary
-from civitai_manager.src.utils.config import load_config, ConfigValidationError
+
 import json
 
 def parse_cli_args(require_args=False):

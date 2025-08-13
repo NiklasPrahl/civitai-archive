@@ -9,7 +9,7 @@
     <style>
         .sidebar {
             min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1488cc 0%, #2b32b2 100%);
         }
         .sidebar .nav-link {
             color: rgba(255,255,255,0.8);
@@ -36,11 +36,9 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s ease;
         }
-        .card:hover {
-            transform: translateY(-2px);
-        }
+        
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1488cc 0%, #2b32b2 100%);
             border: none;
             border-radius: 8px;
         }
@@ -48,9 +46,20 @@
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
+        .btn-secondary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .btn-secondary {
+            border-radius: 8px;
+        }
+        .btn-outline-primary {
+            border-radius: 8px;
+        }
         .alert {
             border-radius: 10px;
             border: none;
+            margin-bottom: 1rem;
         }
         .table {
             border-radius: 10px;
@@ -59,6 +68,28 @@
         .badge {
             border-radius: 20px;
             padding: 8px 12px;
+        }
+
+        /* Pastel accent colors for badges and other elements */
+        .badge.bg-primary, .bg-primary {
+            background-color: #a7c7e7 !important;
+        }
+        .badge.bg-info, .bg-info {
+            background-color: #b3e0ff !important;
+        }
+        .badge.bg-success, .bg-success {
+            background-color: #c8e6c9 !important;
+        }
+        .badge.bg-danger, .bg-danger {
+            background-color: #ffcdd2 !important;
+        }
+        .badge.bg-warning, .bg-warning {
+            background-color: #ffe0b2 !important;
+        }
+
+        /* Ensure dark text on pastel backgrounds for readability */
+        .badge.bg-primary, .badge.bg-info, .badge.bg-success, .badge.bg-danger, .badge.bg-warning {
+            color: #333 !important; /* Dark gray for better contrast */
         }
     </style>
 </head>

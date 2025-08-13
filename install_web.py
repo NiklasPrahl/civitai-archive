@@ -5,7 +5,7 @@ Installation script for Civitai Manager web dependencies
 
 import subprocess
 import sys
-import os
+
 
 def install_package(package):
     """Install a Python package with pip"""

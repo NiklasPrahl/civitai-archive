@@ -2,13 +2,13 @@ import os
 from pathlib import Path
 import json
 import sys
-import hashlib
+
 import shutil
 from datetime import datetime
 import time
 import random
 
-from civitai_manager import __version__
+
 from ..utils.file_tracker import ProcessedFilesManager
 from ..utils.string_utils import sanitize_filename, calculate_sha256
 from ..utils.html_generators.model_page import generate_html_summary
@@ -206,7 +206,7 @@ def download_preview_image(image_url, output_dir, base_name, index=None, is_vide
             url_parts.pop(-2)
         full_size_url = '/'.join(url_parts)
         
-        print(f"\nDownloading preview image:")
+        print("\nDownloading preview image:")
         print(f"URL: {full_size_url}")
         
         response = requests.get(full_size_url, stream=True)
@@ -492,7 +492,7 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
     local_preview_image_filename = None # Initialize here
     try:
         civitai_url = f"https://civitai.com/api/v1/model-versions/by-hash/{hash_value}"
-        print(f"\nFetching version data from Civitai API:")
+        print("\nFetching version data from Civitai API:")
         print(civitai_url)
         
         response = requests.get(civitai_url)
@@ -567,7 +567,7 @@ def fetch_model_details(model_id, output_dir, safetensors_path):
     """
     try:
         civitai_model_url = f"https://civitai.com/api/v1/models/{model_id}"
-        print(f"\nFetching model details from Civitai API:")
+        print("\nFetching model details from Civitai API:")
         print(civitai_model_url)
         
         response = requests.get(civitai_model_url)
@@ -623,7 +623,7 @@ def check_for_updates(safetensors_path, output_dir, hash_value):
             
         # Fetch current version data from Civitai
         civitai_url = f"https://civitai.com/api/v1/model-versions/by-hash/{hash_value}"
-        print(f"\nChecking for updates from Civitai API:")
+        print("\nChecking for updates from Civitai API:")
         print(civitai_url)
         
         response = requests.get(civitai_url)
@@ -706,7 +706,7 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
                 hash_value = hash_data.get('hash_value')
                 if not hash_value:
                     raise ValueError("Invalid hash file")
-        except Exception as e:
+        except Exception:
             return False
     else:
         # Normal processing mode
@@ -740,7 +740,7 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
 
 def process_directory(directory_path, base_output_path, no_timeout=False, 
                      download_all_images=False, skip_images=False, only_new=False, 
-                     html_only=False, only_update=False, skip_missing=False):
+                     html_only=False, only_update=False, skip_missing=False, cancel_flag=None):
     """
     Process all safetensors files in a directory
             
@@ -811,6 +811,9 @@ def process_directory(directory_path, base_output_path, no_timeout=False,
     
     files_processed = 0
     for i, file_path in enumerate(safetensors_files, 1):
+        if cancel_flag and cancel_flag.is_set(): # Check flag before processing each file
+            print("Processing cancelled by user.")
+            break # Exit the loop
         print(f"\n[{i}/{len(safetensors_files)}] Processing: {file_path.relative_to(directory_path)}")
         success = process_single_file(file_path, base_output_path, 
                                     download_all_images, skip_images, html_only, only_update)
@@ -828,7 +831,18 @@ def process_directory(directory_path, base_output_path, no_timeout=False,
             timeout = random.uniform(3, 6)
             print(f"\nWaiting {timeout:.1f} seconds before processing next file (rate limiting protection)...")
             print("(You can use --notimeout to disable this waiting time)")
-            time.sleep(timeout)
+            
+            # New: Break down sleep into smaller intervals and check flag
+            sleep_interval = 0.1 # Check every 100ms
+            slept_time = 0
+            while slept_time < timeout:
+                if cancel_flag and cancel_flag.is_set():
+                    print("Processing cancelled during wait.")
+                    break # Exit the inner loop
+                time.sleep(sleep_interval)
+                slept_time += sleep_interval
+            if cancel_flag and cancel_flag.is_set(): # Check again after the loop
+                break # Exit the outer loop (for file_path in safetensors_files)
     
     # Save the updated processed files list if not in HTML only mode
     if not (html_only or only_update):

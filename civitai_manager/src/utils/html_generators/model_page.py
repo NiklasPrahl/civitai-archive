@@ -64,7 +64,7 @@ def generate_html_summary(output_dir, safetensors_path):
                         try:
                             with open(json_path, 'r', encoding='utf-8') as f:
                                 metadata = json.load(f)
-                        except:
+                        except Exception:
                             pass
                             
                     metadata_attr = f'data-metadata="{html.escape(json.dumps(metadata))}"' if metadata else ''
