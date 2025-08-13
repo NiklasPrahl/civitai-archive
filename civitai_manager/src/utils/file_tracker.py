@@ -33,6 +33,12 @@ class ProcessedFilesManager:
         if str(file_path) not in self.processed_files['files']:
             self.processed_files['files'].append(str(file_path))
 
+    def remove_processed_file(self, file_path):
+        """Remove a file from the processed list"""
+        file_path_str = str(file_path)
+        if file_path_str in self.processed_files['files']:
+            self.processed_files['files'].remove(file_path_str)
+
     def _find_safetensors_files(self, directory_path):
         """Find .safetensors files recursively, following symbolic links"""
         import os

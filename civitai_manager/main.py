@@ -99,8 +99,7 @@ def get_config():
                     cli_config['all'] = config['models_directory']
                 if config.get('output_directory'):
                     cli_config['output'] = config['output_directory']
-                if config.get('download_all_images'):
-                    cli_config['images'] = config['download_all_images']
+                
                 if config.get('notimeout'):
                     cli_config['notimeout'] = config['notimeout']
                 if config.get('skip_images'):
@@ -119,7 +118,11 @@ def get_config():
     # Now we require CLI arguments
     args = parse_cli_args(require_args=True)
     config = vars(args)
-    config.pop('noconfig')
+    # If --images is not specified, it will be False, so we remove it
+    # to allow the default True value in the function calls
+    if not config.get('images'):
+        config.pop('images', None)
+    config.pop('noconfig', None)
     return config
 
 def start_web_server(host='0.0.0.0', port=5000, debug=False):
@@ -168,7 +171,7 @@ def main():
     if config.get('single'):
         safetensors_path = Path(config['single'])
         process_single_file(safetensors_path, base_output_path, 
-                          download_all_images=config.get('images', False),
+                          download_all_images=config.get('images', True),
                           skip_images=config.get('noimages', False),
                           html_only=config.get('onlyhtml', False),
                           only_update=config.get('onlyupdate', False))
@@ -182,7 +185,7 @@ def main():
         else:
             process_directory(directory_path, base_output_path, 
                             config.get('notimeout', False),
-                            download_all_images=config.get('images', False),
+                            download_all_images=config.get('images', True),
                             skip_images=config.get('noimages', False),
                             only_new=config.get('onlynew', False),
                             html_only=config.get('onlyhtml', False),

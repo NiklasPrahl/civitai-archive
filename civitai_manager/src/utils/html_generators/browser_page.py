@@ -19,8 +19,7 @@ def generate_global_summary(output_dir, models_dir):
     start_time = time.time()
     try:
         # Find all model.json files
-        model_files = list(Path(output_dir).glob('*/*/civitai_model.json')) + \
-                      list(Path(output_dir).glob('*/*_civitai_model.json'))
+        model_files = list(Path(output_dir).glob('*/*/civitai_model.json')) + list(Path(output_dir).glob('*/*_civitai_model.json'))
         
         # Read missing models file
         missing_models = set()

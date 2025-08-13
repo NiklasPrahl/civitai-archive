@@ -111,6 +111,28 @@
                         </div>
                     </div>
                     
+                    <!-- File Info -->
+                    <div id="fileInfo" class="card my-4 d-none shadow-sm">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-file-info me-2"></i>
+                                File Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Filename:</strong> <span id="fileName"></span></p>
+                                    <p><strong>File Size:</strong> <span id="fileSize"></span></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>File Type:</strong> <span id="fileType"></span></p>
+                                    <p><strong>Last Modified:</strong> <span id="fileModified"></span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="d-grid gap-2">
                         {{ form.submit(class="btn btn-primary btn-lg", id="submitBtn") }}
                     </div>
@@ -135,28 +157,6 @@
                 </div>
                 <div id="progressText" class="text-muted">
                     Preparing upload...
-                </div>
-            </div>
-        </div>
-        
-        <!-- File Info -->
-        <div id="fileInfo" class="card mt-4 d-none">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-file-info me-2"></i>
-                    File Information
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Filename:</strong> <span id="fileName"></span></p>
-                        <p><strong>File Size:</strong> <span id="fileSize"></span></p>
-                    </div>
-                    <div class="col-md-6">
-                        <p><strong>File Type:</strong> <span id="fileType"></span></p>
-                        <p><strong>Last Modified:</strong> <span id="fileModified"></span></p>
-                    </div>
                 </div>
             </div>
         </div>
@@ -237,7 +237,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (file) {
             fileName.textContent = file.name;
             fileSize.textContent = formatFileSize(file.size);
-            fileType.textContent = file.type || 'Unknown';
+            
+            let type = file.type || 'Unknown';
+            const extension = file.name.split('.').pop().toLowerCase();
+            if (type === 'Unknown' || type === 'application/octet-stream') {
+                const known_extensions = ['safetensors', 'ckpt', 'pt', 'pth', 'bin'];
+                if (known_extensions.includes(extension)) {
+                    type = extension;
+                }
+            }
+            fileType.textContent = type;
+            
             fileModified.textContent = new Date(file.lastModified).toLocaleString('en-US');
             fileInfo.classList.remove('d-none');
         } else {
@@ -248,6 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle form submission with progress
     uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
+        console.log('DEBUG: Upload form submitted.');
         
         const formData = new FormData(this);
         const xhr = new XMLHttpRequest();
@@ -264,32 +275,57 @@ document.addEventListener('DOMContentLoaded', function() {
                 progressBar.style.width = percentComplete + '%';
                 progressBar.textContent = Math.round(percentComplete) + '%';
                 
-                if (percentComplete < 50) {
+                if (percentComplete < 100) {
                     progressText.textContent = 'Uploading file...';
-                } else if (percentComplete < 100) {
-                    progressText.textContent = 'Processing model...';
                 } else {
-                    progressText.textContent = 'Finalizing...';
+                    progressText.textContent = 'File uploaded, server is processing...';
                 }
             }
         });
         
         // Handle completion
         xhr.addEventListener('load', function() {
+            console.log('DEBUG: XHR load event received. Status:', xhr.status);
             if (xhr.status === 200) {
-                progressText.textContent = 'Upload successful! Redirecting...';
-                progressBar.classList.remove('progress-bar-animated');
-                progressBar.classList.add('bg-success');
-                
-                // Redirect after a short delay
-                setTimeout(() => {
-                    window.location.href = '{{ url_for("index") }}';
-                }, 2000);
+                const response = JSON.parse(xhr.responseText);
+                console.log('DEBUG: Server response:', response);
+                if (response.success) {
+                    progressText.textContent = response.message;
+                    progressBar.classList.remove('progress-bar-animated');
+                    
+                    // Poll for processing status
+                    console.log('DEBUG: Starting polling for processing status...');
+                    const interval = setInterval(() => {
+                        fetch('/api/status')
+                            .then(response => response.json())
+                            .then(data => {
+                                console.log('DEBUG: Polling status:', data.is_processing);
+                                if (!data.is_processing) {
+                                    clearInterval(interval);
+                                    progressText.textContent = 'Processing complete! Redirecting...';
+                                    progressBar.classList.add('bg-success');
+                                    console.log('DEBUG: Processing complete, redirecting to index.');
+                                    setTimeout(() => {
+                                        window.location.href = '{{ url_for("index") }}';
+                                    }, 1000);
+                                } else {
+                                    progressText.textContent = 'Processing... please wait.';
+                                }
+                            });
+                    }, 2000);
+                } else {
+                    progressText.textContent = response.message || 'Upload error!';
+                    progressBar.classList.add('bg-danger');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '{{ form.submit.label.text }}';
+                    console.error('ERROR: Server reported upload failure:', response.message);
+                }
             } else {
                 progressText.textContent = 'Upload error!';
                 progressBar.classList.add('bg-danger');
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '{{ form.submit.label }}';
+                submitBtn.innerHTML = '{{ form.submit.label.text }}';
+                console.error('ERROR: XHR status not 200. Status:', xhr.status);
             }
         });
         
@@ -298,7 +334,8 @@ document.addEventListener('DOMContentLoaded', function() {
             progressText.textContent = 'Network error!';
             progressBar.classList.add('bg-danger');
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '{{ form.submit.label }}';
+            submitBtn.innerHTML = '{{ form.submit.label.text }}';
+            console.error('ERROR: XHR network error.');
         });
         
         // Send request

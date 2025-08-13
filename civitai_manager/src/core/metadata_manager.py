@@ -512,24 +512,16 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
                 
                 # Handle image downloads based on flags
                 if not skip_images and 'images' in response_data_to_save and response_data_to_save['images']:
-                    if download_all_images:
-                        print(f"\nDownloading all preview images ({len(response_data_to_save['images'])} images found)")
-                        for i, image_data in enumerate(response_data_to_save['images']):
-                            if 'url' in image_data:
-                                is_video = image_data.get('type') == 'video'
-                                downloaded_filename = download_preview_image(image_data['url'], output_dir, base_name, i, is_video, image_data)
-                                if downloaded_filename and not local_preview_image_filename:
-                                    local_preview_image_filename = downloaded_filename
-                                # Add a small delay between downloads to be nice to the server
-                                if i < len(response_data_to_save['images']) - 1:
-                                    time.sleep(1)
-                    else:
-                        # Download only the first image
-                        if 'url' in response_data_to_save['images'][0]:
-                            is_video = response_data_to_save['images'][0].get('type') == 'video'
-                            downloaded_filename = download_preview_image(response_data_to_save['images'][0]['url'], output_dir, base_name, 0, is_video, response_data_to_save['images'][0])
+                    print(f"\nDownloading all preview images ({len(response_data_to_save['images'])} images found)")
+                    for i, image_data in enumerate(response_data_to_save['images']):
+                        if 'url' in image_data:
+                            is_video = image_data.get('type') == 'video'
+                            downloaded_filename = download_preview_image(image_data['url'], output_dir, base_name, i, is_video, image_data)
                             if downloaded_filename and not local_preview_image_filename:
                                 local_preview_image_filename = downloaded_filename
+                            # Add a small delay between downloads to be nice to the server
+                            if i < len(response_data_to_save['images']) - 1:
+                                time.sleep(1)
 
                 
                 # Return modelId if it exists

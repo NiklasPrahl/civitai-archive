@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Civitai Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-cog me-2"></i>
+        Settings
+    </h1>
+    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>
+        Back to Dashboard
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <!-- Configure Directories Card -->
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-folder-tree me-2"></i>
+                    Configure Directories
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.models_directory.id }}" class="form-label">
+                            <i class="fas fa-folder me-1"></i>
+                            Models Directory
+                        </label>
+                        {{ form.models_directory(class="form-control", placeholder="/path/to/models") }}
+                        <div class="form-text">
+                            The directory containing your .safetensors, .ckpt, .pt, .pth and .bin files.
+                        </div>
+                        {% if form.models_directory.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.models_directory.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.output_directory.id }}" class="form-label">
+                            <i class="fas fa-download me-1"></i>
+                            Output Directory
+                        </label>
+                        {{ form.output_directory(class="form-control", placeholder="/path/to/output") }}
+                        <div class="form-text">
+                            The directory where metadata, images and HTML files will be stored.
+                        </div>
+                        {% if form.output_directory.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.output_directory.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Processing Options Collapsible Section -->
+                                        <p>
+                        <button type="button" class="btn btn-link p-0" data-bs-toggle="collapse" data-bs-target="#processingOptionsCollapse" aria-expanded="false" aria-controls="processingOptionsCollapse">
+                            <h6 class="mb-0">
+                                <i class="fas fa-options me-2"></i>
+                                Processing Options
+                                <i class="fas fa-chevron-right ms-2 collapse-arrow"></i>
+                            </h6>
+                        </button>
+                    </p>
+                    
+                    <div class="collapse" id="processingOptionsCollapse">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    {{ form.download_all_images(class="form-check-input") }}
+                                    <label class="form-check-label" for="{{ form.download_all_images.id }}">
+                                        Download All Images
+                                    </label>
+                                    <div class="form-text small">
+                                        Downloads all available preview images
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    {{ form.skip_images(class="form-check-input") }}
+                                    <label class="form-check-label" for="{{ form.skip_images.id }}">
+                                        Skip Images
+                                    </label>
+                                    <div class="form-text small">
+                                        Skips downloading any images
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    {{ form.notimeout(class="form-check-input") }}
+                                    <label class="form-check-label" for="{{ form.notimeout.id }}">
+                                        No Timeout
+                                    </label>
+                                    <div class="form-text small">
+                                        May trigger rate limiting
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Deleted Model Bin Card -->
+        <div class="card shadow-sm mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-trash-alt me-2"></i>
+                    Deleted Model Bin
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Models that have been deleted (metadata and images) are moved to a bin. They are not permanently removed until you clear the bin.</p>
+                <div class="text-end">
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#clearBinModal">
+                        <i class="fas fa-trash-alt me-2"></i>
+                        Clear Deleted Model Bin
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clear Bin Modal -->
+        <div class="modal fade" id="clearBinModal" tabindex="-1" aria-labelledby="clearBinModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="clearBinModalLabel">Clear Deleted Model Bin</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to permanently delete all models in the bin?</p>
+                        <p class="text-danger">This action cannot be undone.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <form action="{{ url_for('clear_bin') }}" method="POST" style="display: inline;">
+                            <button type="submit" class="btn btn-danger">Clear Bin</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Button -->
+        <div class="text-center mt-4">
+            <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#settingsHelpModal">
+                <i class="fas fa-question-circle me-2"></i>
+                Help & Tips
+            </button>
+        </div>
+
+        <!-- Help Modal -->
+        <div class="modal fade" id="settingsHelpModal" tabindex="-1" aria-labelledby="settingsHelpModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="settingsHelpModalLabel">
+                            <i class="fas fa-question-circle me-2"></i>
+                            Help & Tips
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Models Directory:</h6>
+                                <ul class="small">
+                                    <li>Contains all your AI models (.safetensors, .ckpt, .pt, .pth, .bin)</li>
+                                    <li>Can contain subdirectories</li>
+                                    <li>Used for processing all models</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Output Directory:</h6>
+                                <ul class="small">
+                                    <li>Metadata and images are stored here</li>
+                                    <li>Each model gets its own subfolder</li>
+                                    <li>HTML overviews are generated here</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Tip:</strong> After saving the configuration, you can upload and process models.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-complete common paths
+document.addEventListener('DOMContentLoaded', function() {
+    const modelsDir = document.getElementById('{{ form.models_directory.id }}');
+    const outputDir = document.getElementById('{{ form.output_directory.id }}');
+    
+    // Suggest common paths
+    modelsDir.addEventListener('focus', function() {
+        if (!this.value) {
+            this.placeholder = '/home/user/models or C:\Users\User\Models';
+        }
+    });
+    
+    outputDir.addEventListener('focus', function() {
+        if (!this.value) {
+            this.placeholder = '/home/user/civitai_output or C:\Users\User\CivitaiOutput';
+        }
+    });
+    
+    // Validate paths on blur
+    modelsDir.addEventListener('blur', function() {
+        if (this.value && !this.value.startsWith('/') && !this.value.includes(':\')) {
+            this.classList.add('is-invalid');
+        } else {
+            this.classList.remove('is-invalid');
+        }
+    });
+    
+    outputDir.addEventListener('blur', function() {
+        if (this.value && !this.value.startsWith('/') && !this.value.includes(':\')) {
+            this.classList.add('is-invalid');
+        } else {
+            this.classList.remove('is-invalid');
+        }
+    });
+
+    // Handle collapse arrow rotation for Processing Options
+    const processingOptionsCollapse = document.getElementById('processingOptionsCollapse');
+    const processingOptionsArrow = document.querySelector('button[data-bs-target="#processingOptionsCollapse"] .collapse-arrow');
+
+    if (processingOptionsCollapse && processingOptionsArrow) {
+        processingOptionsCollapse.addEventListener('show.bs.collapse', function () {
+            processingOptionsArrow.classList.remove('fa-chevron-right');
+            processingOptionsArrow.classList.add('fa-chevron-down');
+        });
+
+        processingOptionsCollapse.addEventListener('hide.bs.collapse', function () {
+            processingOptionsArrow.classList.remove('fa-chevron-down');
+            processingOptionsArrow.classList.add('fa-chevron-right');
+        });
+    }
+});
+</script>
+{% endblock %}
