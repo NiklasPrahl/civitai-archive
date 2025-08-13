@@ -158,6 +158,40 @@
                 </a>
             </div>
         {% endif %}
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <div class="text-center mb-2">
+                Showing {{ models|length }} of {{ total_models }} models
+            </div>
+            <ul class="pagination justify-content-center">
+                <li class="page-item {% if current_page == 1 %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('index', page=current_page-1) if current_page > 1 else '#' }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == current_page %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ p }}</span>
+                        </li>
+                    {% else %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('index', page=p) }}">{{ p }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+                
+                <li class="page-item {% if current_page == total_pages %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('index', page=current_page+1) if current_page < total_pages else '#' }}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        {% endif %}
     </div>
 </div>
 

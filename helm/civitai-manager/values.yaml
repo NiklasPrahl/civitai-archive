@@ -1,0 +1,47 @@
+replicaCount: 1
+
+image:
+  repository: civitai-manager
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 5000
+
+persistence:
+  models:
+    enabled: true
+    type: hostPath
+    hostPath: /mnt/models  # Adjust this path
+    mountPath: /data/models
+    readOnly: true
+  output:
+    enabled: true
+    type: pvc
+    storageClass: "default"
+    size: 10Gi
+    mountPath: /data/output
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations: {}
+  hosts:
+    - host: civitai-manager.local
+      paths:
+        - path: /
+          pathType: Prefix

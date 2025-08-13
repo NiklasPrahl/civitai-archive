@@ -2,8 +2,6 @@
 
 A lightweight web ui for local management, backup, and organization of SafeTensors model metadata from Civitai.
 
-NOTE: This is currently just a prototype!
-
 ## Features
 
 - **Web Interface**: Modern web interface for easy management
@@ -12,43 +10,110 @@ NOTE: This is currently just a prototype!
 - **HTML Overviews**: Generates searchable HTML overviews of all models
 - **Batch Processing**: Processes entire directories at once
 - **Upload Functionality**: Upload new models directly through the web interface
+- **Docker Support**: Run as a container or TrueNAS Scale app
+- **TrueNAS Integration**: Full support for TrueNAS Scale deployment
 
-## Installation
+## Installation Options
 
-### Install Dependencies
+### 1. Standard Installation (Local Development)
 
+#### Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
 Or with Poetry:
-
 ```bash
 poetry install
 ```
 
-## Usage
+#### Start the Web Interface
+```bash
+python start_web.py
+```
 
-### Web Interface (Recommended)
+Or via the main module:
+```bash
+python -m civitai_manager.main --web
+```
 
-1. **Start the web application:**
+### 2. Docker Installation
+
+#### Using Docker Compose (Development)
+1. Clone the repository:
    ```bash
-   python start_web.py
+   git clone https://github.com/NiklasPrahl/civitai-archive.git
+   cd civitai-archive
    ```
-   
-   Or via the main module:
+
+2. Edit docker-compose.yml to configure your paths:
+   ```yaml
+   volumes:
+     - /path/to/models:/data/models:ro
+     - civitai_output:/data/output
+   ```
+
+3. Start the container:
    ```bash
-   python -m civitai_manager.main --web
+   docker-compose up -d
    ```
 
-2. **Open in browser:**
-   ```
-   http://localhost:8080
+### 3. TrueNAS Scale Installation
+
+#### Prerequisites
+- TrueNAS Scale installed and configured
+- Access to the TrueNAS Scale web interface
+- Storage pool configured for your models
+
+#### Option A: Direct Docker Installation on TrueNAS
+1. Prepare directories on TrueNAS:
+   ```bash
+   mkdir -p /mnt/pool/models
+   mkdir -p /mnt/pool/civitai-output
    ```
 
-3. **Configure directories:**
-   - Models Directory: Where your .safetensors, .ckpt, .pt, .pth, .bin files are located
-   - Output Directory: Where metadata, images and HTML files will be stored
+2. Set permissions:
+   ```bash
+   chown -R 1000:1000 /mnt/pool/civitai-output
+   chmod -R 755 /mnt/pool/models
+   ```
+
+3. Deploy container:
+   ```bash
+   docker run -d \
+     --name civitai-manager \
+     -p 5000:5000 \
+     -v /mnt/pool/models:/data/models:ro \
+     -v /mnt/pool/civitai-output:/data/output \
+     civitai-manager
+   ```
+
+#### Option B: As TrueNAS Scale Custom App (Recommended)
+1. Create a custom app:
+   - Go to "Apps" -> "Custom Apps"
+   - Click "Upload Custom App" (the cloud icon with up arrow)
+   - Choose either:
+     - Option 1: Upload the pre-built `civitai-manager.tgz` from releases
+     - Option 2: Build and upload your own chart:
+       ```bash
+       cd helm/civitai-manager
+       helm package .
+       ```
+
+2. Install the Custom App:
+   - After uploading, the app will appear in your Custom Apps list
+   - Click "Install"
+   - Configure in the installation wizard:
+     - Models Path: Choose your dataset, e.g., `/mnt/pool/models` (This is where your existing model files are stored)
+     - App Name: e.g., `civitai-manager`
+     - Namespace: e.g., `ix-civitai-manager`
+
+   Note on Storage:
+   - Output Storage is used for permanent storage of metadata, preview images, generated HTML files, and temporary upload processing
+   - The actual model files are read directly from your Models Path and don't need additional storage
+   - Click "Save" and then "Install"
+
+Note: This installation method keeps the app private to your TrueNAS instance and doesn't require adding external catalogs.
 
 4. **Upload or process models:**
    - Use "Model Upload" to add new models

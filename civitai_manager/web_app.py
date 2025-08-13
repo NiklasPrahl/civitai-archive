@@ -28,11 +28,27 @@ app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 processing_thread = None
 cancel_processing_flag = threading.Event()
 
-CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json'))
-UPLOAD_FOLDER = 'uploads'
+CONFIG_FILE = os.environ.get('CONFIG_FILE', os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json')))
+MODELS_DIR = os.environ.get('MODELS_DIR', '')
+OUTPUT_DIR = os.environ.get('OUTPUT_DIR', '')
 ALLOWED_EXTENSIONS = {'safetensors', 'ckpt', 'pt', 'pth', 'bin'}
 
+# Uploads werden im Output-Verzeichnis verarbeitet
+UPLOAD_FOLDER = os.path.join(OUTPUT_DIR, 'uploads') if OUTPUT_DIR else 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Initialize default config if not exists
+if not os.path.exists(CONFIG_FILE):
+    default_config = {
+        'models_directory': MODELS_DIR,
+        'output_directory': OUTPUT_DIR,
+        'download_all_images': False,
+        'skip_images': False,
+        'notimeout': False
+    }
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(default_config, f, indent=4)
 
 class ConfigForm(FlaskForm):
     models_directory = StringField('Models Directory', validators=[DataRequired()])
@@ -166,15 +182,28 @@ def get_models_info():
     return models
 
 @app.route('/')
-def index():
-    """Main dashboard"""
+@app.route('/page/<int:page>')
+def index(page=1):
+    """Main dashboard with pagination"""
     config = load_web_config()
-    models = get_models_info()
     
     if not config.get('models_directory') or not config.get('output_directory'):
         return redirect(url_for('settings'))
     
-    return render_template('dashboard.html', config=config, models=models)
+    models = get_models_info()
+    per_page = 20  # Number of models per page
+    total = len(models)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_models = models[start_idx:end_idx]
+    total_pages = (total + per_page - 1) // per_page
+    
+    return render_template('dashboard.html', 
+                         config=config,
+                         models=paginated_models,
+                         total_models=total,
+                         current_page=page,
+                         total_pages=total_pages)
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():

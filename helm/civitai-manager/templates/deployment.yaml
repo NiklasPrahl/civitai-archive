@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "civitai-manager.fullname" . }}
+  labels:
+    {{- include "civitai-manager.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "civitai-manager.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "civitai-manager.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+          volumeMounts:
+            {{- if .Values.persistence.models.enabled }}
+            - name: models
+              mountPath: {{ .Values.persistence.models.mountPath }}
+              readOnly: {{ .Values.persistence.models.readOnly }}
+            {{- end }}
+            {{- if .Values.persistence.output.enabled }}
+            - name: output
+              mountPath: {{ .Values.persistence.output.mountPath }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        {{- if .Values.persistence.models.enabled }}
+        - name: models
+          {{- if eq .Values.persistence.models.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.persistence.models.hostPath }}
+          {{- end }}
+        {{- end }}
+        {{- if .Values.persistence.output.enabled }}
+        - name: output
+          persistentVolumeClaim:
+            claimName: {{ include "civitai-manager.fullname" . }}-output
+        {{- end }}
+        {{- if .Values.persistence.uploads.enabled }}
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: {{ include "civitai-manager.fullname" . }}-uploads
+        {{- end }}
