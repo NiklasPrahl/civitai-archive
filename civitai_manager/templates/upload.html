@@ -16,7 +16,7 @@
 
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <div class="card">
+        <div class="card shadow-sm">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-cloud-upload-alt me-2"></i>
@@ -24,119 +24,148 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST" enctype="multipart/form-data" id="uploadForm">
-                    {{ form.hidden_tag() }}
-                    
-                    <div class="mb-4">
-                        <label for="{{ form.model_file.id }}" class="form-label">
-                            <i class="fas fa-file me-1"></i>
-                            Select Model File
-                        </label>
-                        <div class="input-group">
-                            {{ form.model_file(class="form-control", accept=".safetensors,.ckpt,.pt,.pth,.bin") }}
-                            <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('{{ form.model_file.id }}').click()">
-                                <i class="fas fa-folder-open"></i>
-                            </button>
-                        </div>
-                        <div class="form-text">
-                            Supported formats: .safetensors, .ckpt, .pt, .pth, .bin
-                        </div>
-                        {% if form.model_file.errors %}
-                            <div class="invalid-feedback d-block">
-                                {% for error in form.model_file.errors %}
-                                    {{ error }}
-                                {% endfor %}
+                <div id="uploadContentWrapper">
+                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="mb-4">
+                            <label for="{{ form.model_file.id }}" class="form-label">
+                                <i class="fas fa-file me-1"></i>
+                                Select Model File
+                            </label>
+                            <div class="input-group">
+                                {{ form.model_file(class="form-control", accept=".safetensors,.ckpt,.pt,.pth,.bin") }}
+                                <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('{{ form.model_file.id }}').click()">
+                                    <i class="fas fa-folder-open"></i>
+                                </button>
                             </div>
-                        {% endif %}
-                    </div>
+                            
+                            {% if form.model_file.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.model_file.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
 
-                    <div class="mb-4 text-center border rounded p-4" id="dropArea">
-                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Drag & Drop your model file here, or <a href="#" id="browseFiles">browse</a></p>
-                        <input type="file" id="hiddenFileInput" style="display: none;" accept=".safetensors,.ckpt,.pt,.pth,.bin">
-                    </div>
-                    
-                    <div class="mb-4">
-                        <p>
-                            <button class="btn btn-link p-0" type="button" data-bs-toggle="collapse" data-bs-target="#uploadProcessCollapse" aria-expanded="false" aria-controls="uploadProcessCollapse">
-                                <i class="fas fa-info-circle me-2"></i>
-                                What happens during upload?
-                                <i class="fas fa-chevron-right ms-2 collapse-arrow"></i>
-                            </button>
-                        </p>
-                        <div class="collapse" id="uploadProcessCollapse">
-                            <div class="card card-body">
+                        <div class="mb-4 text-center border rounded p-4" id="dropArea">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Drag & Drop your model file here</p>
+                            <input type="file" id="hiddenFileInput" style="display: none;" accept=".safetensors,.ckpt,.pt,.pth,.bin">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <p>
+                                <button class="btn btn-link p-0" type="button" data-bs-toggle="collapse" data-bs-target="#uploadProcessCollapse" aria-expanded="false" aria-controls="uploadProcessCollapse">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    What happens during upload?
+                                    <i class="fas fa-chevron-right ms-2 collapse-arrow"></i>
+                                </button>
+                            </p>
+                            <div class="collapse" id="uploadProcessCollapse">
+                                <div class="card card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="d-flex align-items-start mb-2">
+                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                                <div>
+                                                    <strong>File is saved</strong><br>
+                                                    <small class="text-muted">In the configured models directory</small>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-start mb-2">
+                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                                <div>
+                                                    <strong>Automatic processing starts</strong><br>
+                                                    <small class="text-muted">Model is processed immediately after upload</small>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-start mb-2">
+                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                                <div>
+                                                    <strong>Metadata is retrieved</strong><br>
+                                                    <small class="text-muted">From Civitai based on file hash</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="d-flex align-items-start mb-2">
+                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                                <div>
+                                                    <strong>Preview images are downloaded</strong><br>
+                                                    <small class="text-muted">Based on your configuration</small>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-start mb-2">
+                                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                                <div>
+                                                    <strong>HTML overview is updated</strong><br>
+                                                    <small class="text-muted">Automatically after processing</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- File Info -->
+                        <div id="fileInfo" class="card my-4 d-none shadow-sm">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-file-info me-2"></i>
+                                    File Information
+                                </h5>
+                            </div>
+                            <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <div class="d-flex align-items-start mb-2">
-                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                            <div>
-                                                <strong>File is saved</strong><br>
-                                                <small class="text-muted">In the configured models directory</small>
-                                            </div>
-                                        </div>
-                                        <div class="d-flex align-items-start mb-2">
-                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                            <div>
-                                                <strong>Automatic processing starts</strong><br>
-                                                <small class="text-muted">Model is processed immediately after upload</small>
-                                            </div>
-                                        </div>
-                                        <div class="d-flex align-items-start mb-2">
-                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                            <div>
-                                                <strong>Metadata is retrieved</strong><br>
-                                                <small class="text-muted">From Civitai based on file hash</small>
-                                            </div>
-                                        </div>
+                                        <p><strong>Filename:</strong> <span id="fileName"></span></p>
+                                        <p><strong>File Size:</strong> <span id="fileSize"></span></p>
                                     </div>
                                     <div class="col-md-6">
-                                        <div class="d-flex align-items-start mb-2">
-                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                            <div>
-                                                <strong>Preview images are downloaded</strong><br>
-                                                <small class="text-muted">Based on your configuration</small>
-                                            </div>
-                                        </div>
-                                        <div class="d-flex align-items-start mb-2">
-                                            <i class="fas fa-check-circle text-success me-2 mt-1"></i>
-                                            <div>
-                                                <strong>HTML overview is updated</strong><br>
-                                                <small class="text-muted">Automatically after processing</small>
-                                            </div>
-                                        </div>
+                                        <p><strong>File Type:</strong> <span id="fileType"></span></p>
+                                        <p><strong>Last Modified:</strong> <span id="fileModified"></span></p>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- File Info -->
-                    <div id="fileInfo" class="card my-4 d-none shadow-sm">
-                        <div class="card-header">
-                            <h5 class="mb-0">
-                                <i class="fas fa-file-info me-2"></i>
-                                File Information
-                            </h5>
+                        
+                        <div class="d-grid gap-2">
+                            {{ form.submit(class="btn btn-primary btn-lg", id="submitBtn") }}
                         </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <p><strong>Filename:</strong> <span id="fileName"></span></p>
-                                    <p><strong>File Size:</strong> <span id="fileSize"></span></p>
-                                </div>
-                                <div class="col-md-6">
-                                    <p><strong>File Type:</strong> <span id="fileType"></span></p>
-                                    <p><strong>Last Modified:</strong> <span id="fileModified"></span></p>
-                                </div>
+                    </form>
+                    
+                    <!-- Upload Progress - Integrated into card-body -->
+                    <div id="uploadProgress" class="d-none p-3">
+                        <h5 class="mb-3 text-center">
+                            <i class="fas fa-spinner fa-spin me-2"></i>
+                            Upload in Progress...
+                        </h5>
+                        <div class="progress mb-3">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%" id="progressBar">
+                                0%
                             </div>
                         </div>
+                        <div id="progressText" class="text-muted text-center">
+                            Preparing upload...
+                        </div>
                     </div>
-                    
-                    <div class="d-grid gap-2">
-                        {{ form.submit(class="btn btn-primary btn-lg", id="submitBtn") }}
+
+                    <!-- New Success Message Div -->
+                    <div id="uploadSuccessMessage" class="d-none p-3 text-center">
+                        <h5 class="mb-3 text-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Upload and Processing Complete!
+                        </h5>
+                        <p>Your model has been successfully uploaded and processed. You will be redirected to the dashboard shortly.</p>
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
         
@@ -219,18 +248,26 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    
     const fileInput = document.getElementById('{{ form.model_file.id }}');
     const fileInfo = document.getElementById('fileInfo');
     const fileName = document.getElementById('fileName');
     const fileSize = document.getElementById('fileSize');
     const fileType = document.getElementById('fileType');
     const fileModified = document.getElementById('fileModified');
-    const uploadForm = document.getElementById('uploadForm');
+    const uploadForm = document.getElementById('uploadForm'); // The form itself
     const uploadProgress = document.getElementById('uploadProgress');
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
     const submitBtn = document.getElementById('submitBtn');
-    
+    const uploadSuccessMessage = document.getElementById('uploadSuccessMessage'); // New element
+    const uploadContentWrapper = document.getElementById('uploadContentWrapper'); // New element
+
+    // Initially hide progress and success messages
+    uploadProgress.classList.add('d-none');
+    uploadSuccessMessage.classList.add('d-none');
+    uploadForm.classList.remove('d-none'); // Ensure form is visible initially
+
     // Show file info when file is selected
     fileInput.addEventListener('change', function() {
         const file = this.files[0];
@@ -263,9 +300,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData(this);
         const xhr = new XMLHttpRequest();
         
-        // Show progress
+        // Hide the form and show progress
+        uploadForm.classList.add('d-none');
         uploadProgress.classList.remove('d-none');
-        submitBtn.disabled = true;
+        uploadSuccessMessage.classList.add('d-none'); // Ensure success message is hidden
+        
+        submitBtn.disabled = true; // This button is now hidden, but good practice to disable
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Upload in progress...';
         
         // Progress tracking
@@ -302,27 +342,42 @@ document.addEventListener('DOMContentLoaded', function() {
                                 console.log('DEBUG: Polling status:', data.is_processing);
                                 if (!data.is_processing) {
                                     clearInterval(interval);
-                                    progressText.textContent = 'Processing complete! Redirecting...';
-                                    progressBar.classList.add('bg-success');
+                                    uploadProgress.classList.add('d-none'); // Hide progress bar
+                                    uploadSuccessMessage.classList.remove('d-none'); // Show success message
+                                    
                                     console.log('DEBUG: Processing complete, redirecting to index.');
                                     setTimeout(() => {
                                         window.location.href = '{{ url_for("index") }}';
-                                    }, 1000);
+                                    }, 2000); // Give user a moment to see success message
                                 } else {
                                     progressText.textContent = 'Processing... please wait.';
                                 }
+                            })
+                            .catch(error => {
+                                console.error('ERROR: Polling failed:', error);
+                                clearInterval(interval);
+                                progressText.textContent = 'Error checking processing status.';
+                                progressBar.classList.add('bg-danger');
+                                uploadProgress.classList.remove('d-none'); // Keep progress visible for error
+                                uploadForm.classList.add('d-none'); // Keep form hidden
                             });
                     }, 2000);
                 } else {
+                    // Server reported failure
                     progressText.textContent = response.message || 'Upload error!';
                     progressBar.classList.add('bg-danger');
+                    uploadProgress.classList.remove('d-none'); // Keep progress visible for error
+                    uploadForm.classList.remove('d-none'); // Show form again on error
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '{{ form.submit.label.text }}';
                     console.error('ERROR: Server reported upload failure:', response.message);
                 }
             } else {
-                progressText.textContent = 'Upload error!';
+                // HTTP status not 200
+                progressText.textContent = 'Upload error! Server responded with status ' + xhr.status;
                 progressBar.classList.add('bg-danger');
+                uploadProgress.classList.remove('d-none'); // Keep progress visible for error
+                uploadForm.classList.remove('d-none'); // Show form again on error
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '{{ form.submit.label.text }}';
                 console.error('ERROR: XHR status not 200. Status:', xhr.status);
@@ -331,8 +386,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Handle errors
         xhr.addEventListener('error', function() {
-            progressText.textContent = 'Network error!';
+            progressText.textContent = 'Network error! Please check your connection.';
             progressBar.classList.add('bg-danger');
+            uploadProgress.classList.remove('d-none'); // Keep progress visible for error
+            uploadForm.classList.remove('d-none'); // Show form again on error
             submitBtn.disabled = false;
             submitBtn.innerHTML = '{{ form.submit.label.text }}';
             console.error('ERROR: XHR network error.');

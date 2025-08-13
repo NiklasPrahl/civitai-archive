@@ -105,6 +105,9 @@ def get_models_info():
     # Fallback to original, slower logic if summary file is not available or fails
     try:
         for item in os.listdir(output_dir):
+            # Exclude the _bin directory from being processed as a model
+            if item == '_bin':
+                continue
             item_path = os.path.join(output_dir, item)
             if os.path.isdir(item_path):
                 model_info = {
@@ -491,6 +494,14 @@ def delete_model(model_name):
                 shutil.move(str(model_file_path), str(bin_dir / original_filename))
                 message = f'Model {original_filename} and its data'
 
+        # Check if destination for model output path already exists in bin and remove it
+        dest_model_output_in_bin = bin_dir / model_name
+        if dest_model_output_in_bin.exists():
+            if dest_model_output_in_bin.is_dir():
+                shutil.rmtree(dest_model_output_in_bin)
+            else:
+                os.remove(dest_model_output_in_bin)
+        
         shutil.move(str(model_output_path), str(bin_dir))
         flash(f'{message} moved to bin.', 'success')
         
