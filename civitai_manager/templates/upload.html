@@ -84,7 +84,7 @@
                         </div>
                         <div class="collapse mt-2" id="uploadProcessCollapse">
                             <div class="card border-0 bg-light">
-                                <div class="card-body p-4">
+                                <div class="card-body p-4 upload-info">
                                     <div class="row g-4">
                                         <div class="col-md-6">
                                             <div class="d-flex align-items-start">
@@ -161,7 +161,18 @@
                                 <span class="position-absolute w-100 text-center" style="left: 0; line-height: 20px;">0%</span>
                             </div>
                         </div>
-                        <div class="text-end text-muted small" id="uploadStats"></div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="text-muted small" id="uploadStats"></div>
+                            <div id="processingSpinner" class="d-none ms-2">
+                                <div class="spinner-border text-success" role="status" style="width: 1.5rem; height: 1.5rem;">
+                                    <span class="visually-hidden">Verarbeitung läuft ...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="uploadSuccessAlert" class="alert alert-success d-none mt-3 mb-0" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Upload erfolgreich! Modell wird verarbeitet ...
+                        </div>
                     </div>
                 </div>
 
@@ -365,42 +376,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 const response = JSON.parse(xhr.responseText);
                 console.log('DEBUG: Server response:', response);
                 if (response.success) {
-                    progressText.textContent = response.message;
+                    // Zeige grüne Alert-Box und Spinner, reduziere Statusmeldungen
                     progressBar.classList.remove('progress-bar-animated', 'bg-danger');
+                    progressBar.classList.add('bg-success');
+                    progressBar.style.width = '100%';
+                    progressBar.querySelector('span').textContent = '100%';
+                    progressTitle.textContent = 'Upload abgeschlossen';
+                    progressText.textContent = '';
+                    uploadStats.textContent = '';
+                    document.getElementById('uploadSuccessAlert').classList.remove('d-none');
+                    document.getElementById('processingSpinner').classList.remove('d-none');
                     // Poll for processing status
-                    console.log('DEBUG: Starting polling for processing status...');
                     const interval = setInterval(() => {
                         fetch('/api/status')
                             .then(response => response.json())
                             .then(data => {
-                                console.log('DEBUG: Polling status:', data.is_processing);
                                 if (!data.is_processing) {
                                     clearInterval(interval);
-                                        clearInterval(interval);
-                                        progressTitle.textContent = 'Fertig!';
-                                        progressText.textContent = 'Das Modell wurde verarbeitet.';
-                                        setTimeout(() => {
-                                            // Progress-Bar ausblenden, Formular wieder anzeigen, Felder zurücksetzen
-                                            uploadProgress.classList.add('d-none');
-                                            form.reset();
-                                            fileInfo.classList.add('d-none');
-                                            progressBar.style.width = '0%';
-                                            progressBar.classList.remove('bg-success', 'bg-danger');
-                                            progressBar.classList.add('progress-bar-animated', 'bg-primary');
-                                            progressBar.querySelector('span').textContent = '0%';
-                                            progressTitle.textContent = 'Uploading Model';
-                                            progressText.textContent = 'Preparing upload...';
-                                            uploadStats.textContent = '';
-                                            document.getElementById('uploadFormContent').classList.remove('d-none');
-                                            uploadButton.disabled = true;
-                                            uploadButton.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Model';
-                                        }, 2000);
+                                    document.getElementById('processingSpinner').classList.add('d-none');
+                                    progressTitle.textContent = 'Fertig!';
+                                    progressText.textContent = 'Das Modell wurde verarbeitet.';
+                                    setTimeout(() => {
+                                        // Progress-Bar ausblenden, Formular wieder anzeigen, Felder zurücksetzen
+                                        document.getElementById('uploadSuccessAlert').classList.add('d-none');
+                                        uploadProgress.classList.add('d-none');
+                                        form.reset();
+                                        fileInfo.classList.add('d-none');
+                                        progressBar.style.width = '0%';
+                                        progressBar.classList.remove('bg-success', 'bg-danger');
+                                        progressBar.classList.add('progress-bar-animated', 'bg-primary');
+                                        progressBar.querySelector('span').textContent = '0%';
+                                        progressTitle.textContent = 'Uploading Model';
+                                        progressText.textContent = 'Preparing upload...';
+                                        uploadStats.textContent = '';
+                                        document.getElementById('uploadFormContent').classList.remove('d-none');
+                                        uploadButton.disabled = true;
+                                        uploadButton.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Model';
+                                    }, 2000);
                                 } else {
-                                    progressTitle.textContent = 'Processing Model';
-                                    progressBar.style.width = '100%';
-                                    progressBar.querySelector('span').textContent = '100%';
-                                    progressText.textContent = 'Processing model files and retrieving metadata...';
-                                    uploadStats.textContent = 'This may take a few moments...';
+                                    progressTitle.textContent = 'Verarbeitung läuft ...';
+                                    progressText.textContent = '';
+                                    uploadStats.textContent = '';
                                 }
                             })
                             .catch(error => {
@@ -527,4 +543,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-{% endblock %} 
+{% endblock %}

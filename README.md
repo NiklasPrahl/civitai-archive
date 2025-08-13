@@ -1,6 +1,8 @@
 # Civitai Data Manager
 
-A lightweight tool for local management, backup, and organization of SafeTensors model metadata from Civitai.
+A lightweight web ui for local management, backup, and organization of SafeTensors model metadata from Civitai.
+
+NOTE: This is currently just a prototype!
 
 ## Features
 
@@ -148,18 +150,19 @@ python -m civitai_manager.main --all /path/to/models --output /path/to/output --
 
 ```
 civitai_manager/
-├── web_app.py              # Flask web application
-├── main.py                 # CLI main program
-├── templates/              # HTML templates
-│   ├── base.html          # Base template
-│   ├── dashboard.html     # Dashboard
-│   ├── config.html        # Configuration
-│   ├── upload.html        # Upload form
-│   └── model_detail.html  # Model details
-└── src/                   # Core functionality
-    ├── core/              # Metadata processing
-    ├── utils/             # Utility functions
-    └── html_generators/   # HTML generation
+├── config.json                # Main config (managed by web UI)
+├── main.py                    # CLI entry point
+├── web_app.py                 # Flask web application
+├── templates/                 # HTML templates
+│   ├── base.html
+│   ├── dashboard.html
+│   ├── model_detail.html
+│   ├── settings.html
+│   ├── upload.html
+├── src/
+│   ├── core/                  # Metadata processing
+│   ├── migrations/            # Migration scripts
+│   ├── utils/                 # Utility functions
 ```
 
 ### Start Web Application
@@ -172,11 +175,6 @@ python start_web.py
 python -m civitai_manager.main --web --host 0.0.0.0 --port 8080
 ```
 
-## Troubleshooting
-
-### Port 5000 Already in Use (macOS)
-
-On macOS, port 5000 is often used by AirPlay Receiver. The application now uses port 8080 by default. If you need to use a different port:
 
 ```bash
 python -m civitai_manager.main --web --port 9000

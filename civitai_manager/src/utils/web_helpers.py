@@ -3,7 +3,7 @@ import json
 
 from civitai_manager.src.utils.string_utils import calculate_sha256
 
-CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'config.json')) # Adjusted path
+CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'config.json'))
 
 def find_model_file_path(models_dir, stored_hash, stored_filename):
     """
@@ -16,23 +16,20 @@ def find_model_file_path(models_dir, stored_hash, stored_filename):
             candidate_paths.append(os.path.join(root, stored_filename))
 
     if not candidate_paths:
-        return None  # File not found by name
-
-    # Check candidates against the stored hash
+        return None
+    
     for file_path in candidate_paths:
         if calculate_sha256(file_path) == stored_hash:
             return os.path.relpath(file_path, models_dir)
 
-    return None  # No file found with a matching hash
+    return None
 
 def load_web_config():
-    """Load configuration for web interface"""
     try:
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
                 
-                # Ensure all required fields exist with defaults
                 if 'models_directory' not in config:
                     config['models_directory'] = ''
                 if 'output_directory' not in config:

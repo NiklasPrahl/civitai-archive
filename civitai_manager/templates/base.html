@@ -200,6 +200,19 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% block scripts %}{% endblock %}
+    {% block scripts %}
+        {{ super() }}
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          setTimeout(function() {
+            document.querySelectorAll('.alert-success').forEach(function(alert) {
+              alert.classList.add('fade');
+              alert.classList.remove('show');
+              setTimeout(() => alert.classList.add('d-none'), 500);
+            });
+          }, 3000);
+        });
+        </script>
+    {% endblock %}
 </body>
-</html> 
+</html>

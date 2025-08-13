@@ -1,5 +1,7 @@
 # Roadmap
 
+TODO: currently not updated in this fork
+
 This roadmap outlines the planned features and improvements for this project.
 
 ## 🚀 Upcoming Features

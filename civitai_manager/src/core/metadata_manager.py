@@ -21,7 +21,6 @@ except ImportError:
     sys.exit(1)
 
 def find_safetensors_files(directory_path):
-    """Find .safetensors files recursively, following symbolic links"""
     safetensors_files = []
     for root, dirs, files in os.walk(directory_path, followlinks=True):
         for file in files:
@@ -43,7 +42,6 @@ def get_output_path(clean=False):
         else:
             output_path = input("Enter the path where you want to save the exported files (press Enter for current directory): ").strip()
         
-        # Use current directory if input is empty
         if not output_path:
             path = Path.cwd() / 'output'
             print(f"Using current directory: {path}")
@@ -68,27 +66,9 @@ def get_output_path(clean=False):
         return path
 
 def setup_export_directories(base_path, safetensors_path):
-    """
-    Create dated export directory and model-specific subdirectory
-    
-    Args:
-        base_path (Path): Base output directory path
-        safetensors_path (Path): Path to the safetensors file
-        
-    Returns:
-        Path: Path to the model-specific directory
-    """
-    
-    # Create dated directory
-    # current_date = datetime.now()
-    # dated_dir = base_path / f"safetensors-export-{current_date.year}-{current_date.month:02d}-{current_date.day:02d}"
-    # dated_dir.mkdir(exist_ok=True)
-    
-    # Create model-specific directory using sanitized safetensors filename
     sanitized_name = sanitize_filename(safetensors_path.stem)
     model_dir = base_path / sanitized_name
     model_dir.mkdir(exist_ok=True)
-    
     return model_dir
 
 
@@ -162,18 +142,15 @@ def extract_hash(file_path, output_dir):
             raise FileNotFoundError(f"File {path} not found")
         
         hash_value = calculate_sha256(path)
-        base_name = sanitize_filename(path.stem)  # Gets sanitized filename without extension
+        base_name = sanitize_filename(path.stem)
         hash_path = output_dir / f"{base_name}_hash.json"
         
-        # Create hash JSON object
         hash_data = {
             "hash_type": "SHA256",
             "hash_value": hash_value,
             "filename": path.name,
             "timestamp": datetime.now().isoformat()
         }
-        
-        # Write hash to JSON file
         with open(hash_path, 'w', encoding='utf-8') as f:
             json.dump(hash_data, f, indent=4)
         print(f"Hash successfully saved to {hash_path}")
@@ -200,7 +177,6 @@ def download_preview_image(image_url, output_dir, base_name, index=None, is_vide
         if not image_url:
             return False
             
-        # Remove the width parameter to get full size image
         url_parts = image_url.split('/')
         if 'width=' in url_parts[-2]:
             url_parts.pop(-2)
@@ -211,15 +187,10 @@ def download_preview_image(image_url, output_dir, base_name, index=None, is_vide
         
         response = requests.get(full_size_url, stream=True)
         if response.status_code == 200:
-            # Get the extension from the URL
-            # image_name = url_parts[-1]
             ext = '.mp4' if is_video else Path(url_parts[-1]).suffix
-            # Add index to sanitized filename if provided
             sanitized_base = sanitize_filename(base_name)
             image_filename = f'{sanitized_base}_preview{f"_{index}" if index is not None else ""}{ext}'
             image_path = output_dir / image_filename
-            
-            # Download and save the image
             with open(image_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
@@ -251,31 +222,24 @@ def generate_image_json_files(base_output_path):
     """
     print("\nGenerating JSON files for preview images...")
     
-    # Find all model version JSON files
     version_files = list(Path(base_output_path).glob('*/*_civitai_model_version.json'))
     total_generated = 0
     
     for version_file in version_files:
         try:
-            # Read version data
             with open(version_file, 'r', encoding='utf-8') as f:
                 version_data = json.load(f)
             
-            # Get model directory
             model_dir = version_file.parent
             
-            # Process each image in the version data
             if 'images' in version_data:
                 for i, image_data in enumerate(version_data['images']):
-                    # Determine the preview file extension
                     ext = '.mp4' if image_data.get('type') == 'video' else '.jpeg'
                     preview_file = model_dir / f"{model_dir.name}_preview_{i}{ext}"
                     
-                    # Only create JSON if the preview file exists
                     if preview_file.exists():
                         json_file = preview_file.with_suffix('.json')
                         
-                        # Write image metadata
                         with open(json_file, 'w', encoding='utf-8') as f:
                             json.dump(image_data, f, indent=4)
                             total_generated += 1
@@ -299,37 +263,30 @@ def update_missing_files_list(base_path, safetensors_path, status_code):
     missing_file = base_path / "missing_from_civitai.txt"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Read existing entries if file exists, skipping header lines
     entries = []
     if missing_file.exists():
         with open(missing_file, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    # Extract filename from the entry
                     filename = line.split(' | ')[-1]
-                    # Keep entries for other files
                     if filename != safetensors_path.name:
                         entries.append(line)
     
-    # Add new entry if file is missing
     if status_code is not None:
         new_entry = f"{timestamp} | Status {status_code} | {safetensors_path.name}"
         entries.append(new_entry)
     
     if entries:
-        # Write updated list with headers
         with open(missing_file, 'w', encoding='utf-8') as f:
             f.write("# Files not found on Civitai\n")
             f.write("# Format: Timestamp | Status Code | Filename\n")
             f.write("# This file is automatically updated when the script runs\n")
             f.write("# A file is removed from this list when it becomes available again\n\n")
             
-            # Write entries sorted by timestamp (newest first)
             for entry in sorted(entries, reverse=True):
                 f.write(f"{entry}\n")
     elif missing_file.exists():
-        # Delete the file if there are no entries
         missing_file.unlink()
         print("\nAll models are now available on Civitai. Removed missing_from_civitai.txt")
 
@@ -398,7 +355,7 @@ def clean_output_directory(directory_path, base_output_path):
 
     print("\nStarting cleanup process (duplicates)...")
 
-    # First handle duplicates
+    # Handle duplicates
     duplicates = find_duplicate_models(directory_path, base_output_path)
     duplicate_file = None
     
@@ -410,17 +367,14 @@ def clean_output_directory(directory_path, base_output_path):
             f.write("# This file is automatically updated when running --clean\n\n")
             
             for hash_value, models in duplicates.items():
-                # Sort by processed time, newest first
                 sorted_models = sorted(models, 
                     key=lambda x: x['processed_time'] if x['processed_time'] else '',
                     reverse=True
                 )
                 
-                # Keep the newest one, remove others
                 kept_model = sorted_models[0]
                 removed_models = sorted_models[1:]
                 
-                # Write to duplicates file
                 f.write(f"Hash: {hash_value}\n")
                 f.write(f'Kept: {kept_model["safetensors_file"]}\n')
                 f.write("Removed:\n")
@@ -439,8 +393,6 @@ def clean_output_directory(directory_path, base_output_path):
         print("\nNo duplicates to remove")
 
     print("\nStarting cleanup process (removed models)...")
-    # Then handle missing models
-    # Get list of all current safetensors files (without extension)
     existing_models = {
         Path(file).stem
         for file in find_safetensors_files(directory_path)
@@ -489,7 +441,7 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
     Returns:
         int or None: modelId if successful, None otherwise
     """
-    local_preview_image_filename = None # Initialize here
+    local_preview_image_filename = None
     try:
         civitai_url = f"https://civitai.com/api/v1/model-versions/by-hash/{hash_value}"
         print("\nFetching version data from Civitai API:")
@@ -500,17 +452,15 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
         civitai_path = output_dir / f"{base_name}_civitai_model_version.json"
         
         if response.status_code == 200:
-            response_data_to_save = response.json() # Call json() only once
+            response_data_to_save = response.json()
             if local_preview_image_filename:
                 response_data_to_save['local_preview_image'] = local_preview_image_filename
             with open(civitai_path, 'w', encoding='utf-8') as f:
                 json.dump(response_data_to_save, f, indent=4)
                 print(f"Version data successfully saved to {civitai_path}")
 
-                # Remove from missing files list if it was there before
-                update_missing_files_list(base_path, safetensors_path, None)  # Pass None to indicate file is back
+                update_missing_files_list(base_path, safetensors_path, None)  
                 
-                # Handle image downloads based on flags
                 if not skip_images and 'images' in response_data_to_save and response_data_to_save['images']:
                     print(f"\nDownloading all preview images ({len(response_data_to_save['images'])} images found)")
                     for i, image_data in enumerate(response_data_to_save['images']):
@@ -519,12 +469,9 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
                             downloaded_filename = download_preview_image(image_data['url'], output_dir, base_name, i, is_video, image_data)
                             if downloaded_filename and not local_preview_image_filename:
                                 local_preview_image_filename = downloaded_filename
-                            # Add a small delay between downloads to be nice to the server
                             if i < len(response_data_to_save['images']) - 1:
                                 time.sleep(1)
 
-                
-                # Return modelId if it exists
                 return response_data_to_save.get('modelId')
         else:
             error_message = {
@@ -536,14 +483,11 @@ def fetch_version_data(hash_value, output_dir, base_path, safetensors_path, down
                 json.dump(error_message, f, indent=4)
             print(f"Error: Failed to fetch Civitai data (Status code: {response.status_code})")
             
-            # Update missing files list
             update_missing_files_list(base_path, safetensors_path, response.status_code)
             return None
                 
     except Exception as e:
         print(f"Error fetching version data: {str(e)}")
-        # Update missing files list for connection errors
-        # update_missing_files_list(base_path, safetensors_path, 0)  # Use 0 for connection errors
         return None
 
 def fetch_model_details(model_id, output_dir, safetensors_path):
@@ -641,7 +585,7 @@ def check_for_updates(safetensors_path, output_dir, hash_value):
             
     except Exception as e:
         print(f"Error checking for updates: {str(e)}")
-        return True  # If there's any error, proceed with update
+        return True
 
 def process_single_file(safetensors_path, base_output_path, download_all_images=False,
                         skip_images=False, html_only=False, only_update=False):
@@ -662,7 +606,6 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
     if safetensors_path.suffix != '.safetensors':
         return False
     
-    # Setup export directories
     model_output_dir = setup_export_directories(base_output_path, safetensors_path)
     
     print(f"\nProcessing: {safetensors_path.name}")
@@ -681,12 +624,10 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
         if not all(f.exists() for f in required_files):
             return False
             
-        # Generate HTML only
         generate_html_summary(model_output_dir, safetensors_path)
         return True
     
     if only_update:
-        # Check if hash file exists
         hash_file = model_output_dir / f"{safetensors_path.stem}_hash.json"
         if not hash_file.exists():
             return False
@@ -701,16 +642,13 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
         except Exception:
             return False
     else:
-        # Normal processing mode
         hash_value = extract_hash(safetensors_path, model_output_dir)
         if not hash_value:
             return False
     
-    # Check if update is needed
     if not check_for_updates(safetensors_path, model_output_dir, hash_value):
         return True
     
-    # Process the file
     metadata_extracted = False
     if only_update:
         metadata_extracted = True # Assume metadata is already there for update mode
@@ -751,10 +689,8 @@ def process_directory(directory_path, base_output_path, no_timeout=False,
         print(f"Error: Directory {directory_path} not found")
         return False
         
-    # Initialize processed files manager if needed
     files_manager = None if html_only else ProcessedFilesManager(base_output_path)
     
-    # Get files to process
     if only_new and not html_only:
         safetensors_files = files_manager.get_new_files(directory_path)
         if not safetensors_files:
@@ -805,7 +741,7 @@ def process_directory(directory_path, base_output_path, no_timeout=False,
     for i, file_path in enumerate(safetensors_files, 1):
         if cancel_flag and cancel_flag.is_set(): # Check flag before processing each file
             print("Processing cancelled by user.")
-            break # Exit the loop
+            break
         print(f"\n[{i}/{len(safetensors_files)}] Processing: {file_path.relative_to(directory_path)}")
         success = process_single_file(file_path, base_output_path, 
                                     download_all_images, skip_images, html_only, only_update)
@@ -824,19 +760,17 @@ def process_directory(directory_path, base_output_path, no_timeout=False,
             print(f"\nWaiting {timeout:.1f} seconds before processing next file (rate limiting protection)...")
             print("(You can use --notimeout to disable this waiting time)")
             
-            # New: Break down sleep into smaller intervals and check flag
             sleep_interval = 0.1 # Check every 100ms
             slept_time = 0
             while slept_time < timeout:
                 if cancel_flag and cancel_flag.is_set():
                     print("Processing cancelled during wait.")
-                    break # Exit the inner loop
+                    break
                 time.sleep(sleep_interval)
                 slept_time += sleep_interval
-            if cancel_flag and cancel_flag.is_set(): # Check again after the loop
-                break # Exit the outer loop (for file_path in safetensors_files)
+            if cancel_flag and cancel_flag.is_set():
+                break
     
-    # Save the updated processed files list if not in HTML only mode
     if not (html_only or only_update):
         files_manager.save_processed_files()
 

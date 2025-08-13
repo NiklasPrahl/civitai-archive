@@ -23,18 +23,15 @@ from civitai_manager.src.utils.file_tracker import ProcessedFilesManager
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 
-# Global variable to hold the processing thread and a cancellation flag
 processing_thread = None
 cancel_processing_flag = threading.Event()
 
-# Global configuration
-CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json')) # Adjusted path
+CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json'))
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'safetensors', 'ckpt', 'pt', 'pth', 'bin'}
 
-# Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 class ConfigForm(FlaskForm):

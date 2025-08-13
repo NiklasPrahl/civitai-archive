@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2025-08-13
+### Visual
+- Visual adjustments to upload progress UI and sidebar
+- Visual improvements to upload window
+- Visual changes and cleanup
+
+### Feature
+- Improved model management including model deletion
+- Optimized dashboard loading
+
+### Fix
+- Fixed untracked files
+- Preview images now load from local folder
+
+### Refactor
+- First draft for web UI refactoring
+- Restyle of metadata detail view
+- Small changes to UX
+
 ## [1.6.5] - 2025-07-30
 ### Fix
 - Add symbolic link support for recursive .safetensors file discovery.
