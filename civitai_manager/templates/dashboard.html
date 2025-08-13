@@ -99,7 +99,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('model_detail', model_name=model.name) }}" 
+                                    <a href="{{ url_for('model_detail', model_name=model.base_name) }}" 
                                        class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-eye me-1"></i>
                                         Details
@@ -136,7 +136,7 @@
                                 {% endif %}
                             </div>
                             <div class="mt-auto">
-                                <a href="{{ url_for('model_detail', model_name=model.name) }}" class="btn btn-sm btn-primary w-100">
+                                <a href="{{ url_for('model_detail', model_name=model.base_name) }}" class="btn btn-sm btn-primary w-100">
                                     <i class="fas fa-eye me-1"></i> Details
                                 </a>
                             </div>

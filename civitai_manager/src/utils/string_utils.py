@@ -25,3 +25,16 @@ def sanitize_filename(filename):
     sanitized = re.sub(r'_+', '_', sanitized)
     
     return sanitized
+
+import hashlib
+
+def calculate_sha256(file_path, buffer_size=65536):
+    """Calculate SHA256 hash of a file"""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        while True:
+            data = f.read(buffer_size)
+            if not data:
+                break
+            sha256_hash.update(data)
+    return sha256_hash.hexdigest()

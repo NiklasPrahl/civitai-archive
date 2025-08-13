@@ -21,6 +21,7 @@ from civitai_manager.src.core.metadata_manager import (
     get_output_path,
     calculate_sha256
 )
+from civitai_manager.src.utils.web_helpers import find_model_file_path, load_web_config, save_web_config
 from civitai_manager.src.utils.html_generators.browser_page import generate_global_summary
 from civitai_manager.src.utils.config import load_config, ConfigValidationError
 
@@ -54,25 +55,7 @@ class UploadForm(FlaskForm):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def find_model_file_path(models_dir, stored_hash, stored_filename):
-    """
-    Finds a model file recursively and verifies it with a hash check.
-    Returns the relative path to the model file or None if not found/verified.
-    """
-    candidate_paths = []
-    for root, _, files in os.walk(models_dir):
-        if stored_filename in files:
-            candidate_paths.append(os.path.join(root, stored_filename))
 
-    if not candidate_paths:
-        return None  # File not found by name
-
-    # Check candidates against the stored hash
-    for file_path in candidate_paths:
-        if calculate_sha256(file_path) == stored_hash:
-            return os.path.relpath(file_path, models_dir)
-
-    return None  # No file found with a matching hash
 
 def load_web_config():
     """Load configuration for web interface"""
@@ -109,7 +92,7 @@ def save_web_config(config):
         return False
 
 def get_models_info():
-    """Get information about all models in the output directory"""
+    """Get information about all models for the dashboard."""
     config = load_web_config()
     output_dir = config.get('output_directory')
     models_dir = config.get('models_directory')
@@ -117,7 +100,34 @@ def get_models_info():
     if not output_dir or not os.path.exists(output_dir):
         return []
 
+    summary_file_path = os.path.join(output_dir, 'all_models_summary.json')
+    
     models = []
+    # Try to load from the pre-generated summary file
+    if os.path.exists(summary_file_path):
+        try:
+            with open(summary_file_path, 'r', encoding='utf-8') as f:
+                models = json.load(f)
+            
+            # Post-process models to add local preview image URLs
+            for model in models:
+                item = model['base_name'] # This is the sanitized name
+                item_path = os.path.join(output_dir, item)
+                local_images = [f for f in os.listdir(item_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+                if local_images:
+                    # Construct the relative path for local_static_files endpoint
+                    model['preview_image_url'] = url_for('local_static_files', filename=f'{item}/{sorted(local_images)[0]}')
+                    model['has_images'] = True
+                else:
+                    model['preview_image_url'] = url_for('static', filename='placeholder.png')
+                    model['has_images'] = False
+
+            return models
+        except Exception as e:
+            # Fallback to direct scan if summary file fails
+            pass
+
+    # Fallback to original, slower logic if summary file is not available or fails
     try:
         for item in os.listdir(output_dir):
             item_path = os.path.join(output_dir, item)
@@ -147,14 +157,6 @@ def get_models_info():
                     if metadata.get('creator') and metadata['creator'].get('name'):
                         model_info['author'] = metadata['creator']['name']
                     model_info['tags'] = metadata.get('tags', [])
-
-                    # Get preview image URL from the first version
-                    if metadata.get('modelVersions'):
-                        first_version = metadata['modelVersions'][0]
-                        if first_version.get('images'):
-                            # This just gets the remote URL, not ideal
-                            # A better way is to find the local preview
-                            pass
 
                 # Robustly find local preview image
                 local_images = [f for f in os.listdir(item_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
@@ -265,7 +267,7 @@ def upload():
                             download_all_images=config.get('download_all_images', False),
                             skip_images=config.get('skip_images', False)
                         )
-                        generate_global_summary(output_dir)
+                        generate_global_summary(output_dir, models_dir)
                     except Exception as e:
                         print(f"Error processing uploaded file {filename}: {e}")
                 
@@ -305,7 +307,7 @@ def process_all():
                 download_all_images=config.get('download_all_images', False),
                 skip_images=config.get('skip_images', False)
             )
-            generate_global_summary(output_dir)
+            generate_global_summary(output_dir, models_dir)
         except Exception as e:
             print(f"Error processing all models: {e}")
     
@@ -335,37 +337,29 @@ def model_detail(model_name):
 
     try:
         model_metadata_path = os.path.join(model_path, f'{model_name}_civitai_model.json')
-        print(f"DEBUG: Checking model metadata path: {model_metadata_path}")
         if os.path.exists(model_metadata_path):
             try:
                 with open(model_metadata_path, 'r') as f:
                     metadata = json.load(f)
-                print(f"DEBUG: Successfully loaded model metadata from {model_metadata_path}")
             except json.JSONDecodeError as e:
                 print(f"ERROR: JSONDecodeError when loading model metadata from {model_metadata_path}: {e}")
                 metadata = {} # Ensure metadata is empty on error
             except Exception as e:
                 print(f"ERROR: Unexpected error when loading model metadata from {model_metadata_path}: {e}")
                 metadata = {} # Ensure metadata is empty on error
-        else:
-            print(f"DEBUG: Model metadata file not found: {model_metadata_path}")
 
 
         version_metadata_path = os.path.join(model_path, f'{model_name}_civitai_model_version.json')
-        print(f"DEBUG: Checking version metadata path: {version_metadata_path}")
         if os.path.exists(version_metadata_path):
             try:
                 with open(version_metadata_path, 'r') as f:
                     version_data = json.load(f)
-                print(f"DEBUG: Successfully loaded version metadata from {version_metadata_path}")
             except json.JSONDecodeError as e:
                 print(f"ERROR: JSONDecodeError when loading version metadata from {version_metadata_path}: {e}")
                 version_data = {} # Ensure version_data is empty on error
             except Exception as e:
                 print(f"ERROR: Unexpected error when loading version metadata from {version_metadata_path}: {e}")
                 version_data = {} # Ensure version_data is empty on error
-        else:
-            print(f"DEBUG: Version metadata file not found: {version_metadata_path}")
         
         if metadata and 'modelVersions' in metadata and version_data:
             version_id = version_data.get('id')
@@ -377,28 +371,20 @@ def model_detail(model_name):
                     break
 
         if version_data.get('images'):
-            print(f"DEBUG: Found {len(version_data['images'])} images in version_data.")
             for i, image_data in enumerate(version_data['images']):
-                print(f"DEBUG: Processing image {i}: {image_data}")
                 if image_data.get('type') == 'video':
                     ext = '.mp4'
-                    print(f"DEBUG: Image {i} is video, ext={ext}")
                 else:
                     url = image_data.get('url', '')
                     ext = Path(url.split('?')[0]).suffix if url else '.jpeg'
-                    print(f"DEBUG: Image {i} is not video, URL={url}, ext={ext}")
 
                 image_filename = f"{model_name}/{model_name}_preview_{i}{ext}"
                 full_image_path = os.path.join(output_dir, image_filename)
-                print(f"DEBUG: Constructed image_filename: {image_filename}")
-                print(f"DEBUG: Full image path: {full_image_path}")
                 
                 if os.path.exists(full_image_path):
                     version_data['images'][i]['local_url'] = url_for('local_static_files', filename=image_filename)
-                    print(f"DEBUG: Image {i} exists. local_url: {version_data['images'][i]['local_url']}")
                 else:
                     version_data['images'][i]['local_url'] = url_for('static', filename='placeholder.png')
-                    print(f"DEBUG: Image {i} DOES NOT exist. Using placeholder. local_url: {version_data['images'][i]['local_url']}")
 
         if not metadata:
             model_info_path = os.path.join(model_path, 'model_info.json')
@@ -420,7 +406,6 @@ def model_detail(model_name):
     except Exception as e:
         print(f"Error reading model details for {model_name}: {e}")
 
-    print(f"DEBUG_VERSION_DATA: {version_data}")
     return render_template('model_detail.html',
                          model_name=model_name,
                          model_files=model_files,

@@ -10,7 +10,7 @@ import random
 
 from civitai_manager import __version__
 from ..utils.file_tracker import ProcessedFilesManager
-from ..utils.string_utils import sanitize_filename
+from ..utils.string_utils import sanitize_filename, calculate_sha256
 from ..utils.html_generators.model_page import generate_html_summary
 
 try:
@@ -91,16 +91,7 @@ def setup_export_directories(base_path, safetensors_path):
     
     return model_dir
 
-def calculate_sha256(file_path, buffer_size=65536):
-    """Calculate SHA256 hash of a file"""
-    sha256_hash = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        while True:
-            data = f.read(buffer_size)
-            if not data:
-                break
-            sha256_hash.update(data)
-    return sha256_hash.hexdigest()
+
 
 def extract_metadata(file_path, output_dir):
     """
@@ -673,17 +664,15 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
         html_only (bool): Whether to only generate HTML files
         only_update (bool): Whether to only update existing processed files
     """
-
     if not safetensors_path.exists():
-        print(f"Error: File {safetensors_path} not found")
         return False
         
     if safetensors_path.suffix != '.safetensors':
-        print(f"Error: File {safetensors_path} is not a safetensors file")
         return False
     
     # Setup export directories
     model_output_dir = setup_export_directories(base_output_path, safetensors_path)
+    
     print(f"\nProcessing: {safetensors_path.name}")
     if not html_only:
         print(f"Files will be saved in: {model_output_dir}")
@@ -698,7 +687,6 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
         ]
         
         if not all(f.exists() for f in required_files):
-            print(f"Error: Missing required JSON files for {safetensors_path.name}")
             return False
             
         # Generate HTML only
@@ -709,7 +697,6 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
         # Check if hash file exists
         hash_file = model_output_dir / f"{safetensors_path.stem}_hash.json"
         if not hash_file.exists():
-            print(f"Skipping {safetensors_path.name} (not previously processed)")
             return False
             
         # Read existing hash
@@ -720,30 +707,36 @@ def process_single_file(safetensors_path, base_output_path, download_all_images=
                 if not hash_value:
                     raise ValueError("Invalid hash file")
         except Exception as e:
-            print(f"Error reading hash file: {e}")
             return False
     else:
         # Normal processing mode
         hash_value = extract_hash(safetensors_path, model_output_dir)
         if not hash_value:
-            print("Error: Failed to extract hash")
             return False
     
     # Check if update is needed
     if not check_for_updates(safetensors_path, model_output_dir, hash_value):
-        print("Skipping file (no updates available)")
         return True
     
     # Process the file
-    if only_update or extract_metadata(safetensors_path, model_output_dir):
+    metadata_extracted = False
+    if only_update:
+        metadata_extracted = True # Assume metadata is already there for update mode
+    else:
+        metadata_extracted = extract_metadata(safetensors_path, model_output_dir)
+
+    if metadata_extracted:
         model_id = fetch_version_data(hash_value, model_output_dir, base_output_path, 
                                     safetensors_path, download_all_images, skip_images)
         if model_id:
             fetch_model_details(model_id, model_output_dir, safetensors_path)
             generate_html_summary(model_output_dir, safetensors_path)
             return True
+        else:
+            return False
             
     return False
+
 
 def process_directory(directory_path, base_output_path, no_timeout=False, 
                      download_all_images=False, skip_images=False, only_new=False, 

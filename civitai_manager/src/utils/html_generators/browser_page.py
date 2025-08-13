@@ -1,17 +1,22 @@
+import time
 from pathlib import Path
 import html
 from ..string_utils import sanitize_filename
 import json
 from datetime import datetime
 from civitai_manager import __version__
+from civitai_manager.src.utils.web_helpers import find_model_file_path, load_web_config
 
-def generate_global_summary(output_dir):
+def generate_global_summary(output_dir, models_dir):
     """
     Generate an HTML summary of all models in the output directory
     
     Args:
         output_dir (Path): Directory containing the JSON files
+        models_dir (str): Directory containing the actual model files
     """
+    print("DEBUG: Entering generate_global_summary().")
+    start_time = time.time()
     try:
         # Find all model.json files
         model_files = list(Path(output_dir).glob('*/*/civitai_model.json')) + \
@@ -58,21 +63,35 @@ def generate_global_summary(output_dir):
                 if model_type not in models_by_type:
                     models_by_type[model_type] = []
                     
-                models_by_type[model_type].append({
+                model_entry = {
                     # Add model data
                     'name': model_data.get('name') or 'Unknown',
                     'creator': model_data.get('creator', {}).get('username', 'Unknown'),
                     'base_name': base_name,
                     'html_file': f"{base_name}.html",
                     'tags': model_data.get('tags', []),
+                    'has_metadata': bool(model_data), # True if model_data was loaded
                     # Add version data
                     'version_name': version_data.get('name', ''),
                     'downloads': version_data.get('stats', {}).get('downloadCount', 0),
                     'has_html': html_file.exists(),
                     'added_date': hash_data.get('timestamp', ''),
-                    'file_size': version_data.get('files', [{}])[0].get('sizeKB', None)
-                })
-            except:
+                    'file_size': version_data.get('files', [{}])[0].get('sizeKB', None),
+                    'files': [] # Initialize files list
+                }
+
+                # Check for model file presence
+                if hash_data and models_dir:
+                    stored_hash = hash_data.get('hash_value')
+                    stored_filename = hash_data.get('filename')
+                    if stored_hash and stored_filename:
+                        rel_path = find_model_file_path(models_dir, stored_hash, stored_filename)
+                        if rel_path:
+                            model_entry['files'].append(rel_path)
+
+                models_by_type[model_type].append(model_entry)
+            except Exception as e:
+                print(f"DEBUG: Error processing model file {model_file}: {e}")
                 continue
 
         # Process missing models
@@ -118,7 +137,7 @@ def generate_global_summary(output_dir):
                 sanitized_base = sanitize_filename(model["base_name"])
                 html_name = f"{sanitized_base}.html"
                 model_name = (
-                    f'<a href="{sanitized_base}/{html_name}">{html.escape(model["name"])}</a>'
+                    f'<a href="/model/{sanitized_base}">{html.escape(model["name"])}</a>'
                     if model.get('has_html', False) or not model.get('missing')
                     else '<span class="missing-model">' + html.escape(model['name']) + '</span>'
                 )
@@ -507,14 +526,28 @@ def generate_global_summary(output_dir):
 </html>
 """
 
+        # Save models data to a JSON file for API access
+        all_models_list = []
+        for model_type, models in models_by_type.items():
+            for model in models:
+                # Add model_type to each model for filtering/categorization
+                model['model_type'] = model_type
+                all_models_list.append(model)
+
+        print("DEBUG: Writing all_models_summary.json...")
+        json_summary_path = output_dir / 'all_models_summary.json'
+        with open(json_summary_path, 'w', encoding='utf-8') as f:
+            json.dump(all_models_list, f, indent=2)
+        print(f"DEBUG: All models summary JSON generated: {json_summary_path} (took {time.time() - start_time:.4f} seconds for data collection and JSON write).")
+
         # Write the summary file
         summary_path = Path(output_dir) / 'index.html'
         with open(summary_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        print(f"\nGlobal summary generated: {summary_path}")
+        print(f"DEBUG: Global summary HTML generated: {summary_path}")
         return True
 
     except Exception as e:
-        print(f"Error generating global summary: {str(e)}")
+        print(f"DEBUG: Error generating global summary: {str(e)}")
         return False
