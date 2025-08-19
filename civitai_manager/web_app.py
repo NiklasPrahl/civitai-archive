@@ -192,7 +192,7 @@ def get_models_info():
                     model['has_images'] = False
                 
                 # Explicitly escape HTML for title and author
-                model['title'] = html.escape(model.get('title', ''))
+                model['title'] = html.escape(model.get('name', ''))
                 model['author'] = html.escape(model.get('author', 'Unknown'))
                 model['tags'] = [html.escape(tag) for tag in model.get('tags', [])]
 

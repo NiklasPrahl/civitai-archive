@@ -116,7 +116,7 @@
                 {% for model in models %}
                 <div class="col-md-4 mb-4">
                     <div class="card h-100 shadow-sm">
-                        <img src="{{ model.preview_image_url }}" class="card-img-top" alt="{{ model.title|e }}" style="height: 200px; object-fit: cover;" onerror="handleImageError(this)">
+                        <img src="{{ model.preview_image_url }}" class="card-img-top" alt="{{ model.title|e }}" style="height: 250px; object-fit: cover; object-position: top;" onerror="handleImageError(this)">
                         <div class="card-body d-flex flex-column">
                             <h5 class="card-title text-truncate mb-1" title="{{ model.title|e }}">{{ model.title|e }}</h5>
                             <h6 class="card-subtitle mb-2 text-muted text-truncate">by {{ model.author|e }}</h6>
@@ -227,11 +227,31 @@ function processAllModels() {
                 messageSpan.textContent = 'Processing started! Page will reload in 30 seconds...';
                 statusDiv.classList.remove('alert-info');
                 statusDiv.classList.add('alert-success');
-                
-                // Reload page after 30 seconds to show updated data
-                setTimeout(() => {
-                    window.location.reload();
-                }, 30000);
+
+                // Start polling for processing status
+                const interval = setInterval(() => {
+                    fetch('/api/status')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data.is_processing) {
+                                clearInterval(interval);
+                                messageSpan.textContent = 'Processing completed! Reloading page...';
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 2000); // Give user a moment to read message
+                            } else {
+                                messageSpan.textContent = 'Processing in progress...';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error polling processing status:', error);
+                            clearInterval(interval);
+                            messageSpan.textContent = 'Error checking processing status.';
+                            statusDiv.classList.remove('alert-info', 'alert-success');
+                            statusDiv.classList.add('alert-danger');
+                        });
+                }, 2000); // Poll every 2 seconds
+
             }
         })
         .catch(error => {
@@ -241,46 +261,51 @@ function processAllModels() {
         });
 }
 
-// Auto-refresh status every 10 seconds
-setInterval(() => {
-    fetch('/api/status')
-        .then(response => response.json())
-        .then(data => {
-            // Update status if needed
-        })
-        .catch(error => {
-            console.error('Error fetching status:', error);
-        });
-}, 10000);
-
 // View toggle functionality
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded fired.');
     const viewToggleBtn = document.getElementById('viewToggleBtn');
     const viewToggleIcon = document.getElementById('viewToggleIcon');
     const listView = document.getElementById('listView');
     const gridView = document.getElementById('gridView');
 
+    if (!viewToggleBtn) console.error('viewToggleBtn not found!');
+    if (!listView) console.error('listView not found!');
+    if (!gridView) console.error('gridView not found!');
+
     // Load saved view preference
     let isGridView = localStorage.getItem('isGridView') === 'true';
+    console.log('Initial isGridView:', isGridView);
     updateView();
 
-    viewToggleBtn.addEventListener('click', function() {
-        isGridView = !isGridView;
-        localStorage.setItem('isGridView', isGridView);
-        updateView();
-    });
+    if (viewToggleBtn) {
+        viewToggleBtn.addEventListener('click', function() {
+            console.log('View toggle button clicked.');
+            isGridView = !isGridView;
+            localStorage.setItem('isGridView', isGridView);
+            console.log('New isGridView:', isGridView);
+            updateView();
+        });
+    }
 
     function updateView() {
+        console.log('updateView called. isGridView:', isGridView);
         if (isGridView) {
+            console.log('Switching to Grid View.');
             listView.classList.add('d-none');
             gridView.classList.remove('d-none');
             viewToggleIcon.classList.remove('fa-th-large');
             viewToggleIcon.classList.add('fa-list');
+            console.log('listView classes:', listView.classList);
+            console.log('gridView classes:', gridView.classList);
         } else {
+            console.log('Switching to List View.');
             listView.classList.remove('d-none');
             gridView.classList.add('d-none');
             viewToggleIcon.classList.remove('fa-list');
             viewToggleIcon.classList.add('fa-th-large');
+            console.log('listView classes:', listView.classList);
+            console.log('gridView classes:', gridView.classList);
         }
     }
 
