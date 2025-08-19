@@ -57,14 +57,14 @@
                             {% for model in models %}
                             <tr>
                                 <td>
-                                    <strong>{{ model.name }}</strong>
+                                    <strong>{{ model.name|e }}</strong>
                                 </td>
                                 <td>
                                     {% if model.files %}
                                         <span class="badge bg-info">{{ model.files|length }} file(s)</span>
                                         <small class="d-block text-muted">
                                             {% for file in model.files[:3] %}
-                                                {{ file }}{% if not loop.last %}, {% endif %}
+                                                {{ file|e }}{% if not loop.last %}, {% endif %}
                                             {% endfor %}
                                             {% if model.files|length > 3 %}...{% endif %}
                                         </small>
@@ -116,14 +116,14 @@
                 {% for model in models %}
                 <div class="col-md-4 mb-4">
                     <div class="card h-100 shadow-sm">
-                        <img src="{{ model.preview_image_url }}" class="card-img-top" alt="{{ model.title }}" style="height: 200px; object-fit: cover;" onerror="handleImageError(this)">
+                        <img src="{{ model.preview_image_url }}" class="card-img-top" alt="{{ model.title|e }}" style="height: 200px; object-fit: cover;" onerror="handleImageError(this)">
                         <div class="card-body d-flex flex-column">
-                            <h5 class="card-title text-truncate mb-1" title="{{ model.title }}">{{ model.title }}</h5>
-                            <h6 class="card-subtitle mb-2 text-muted text-truncate">by {{ model.author }}</h6>
+                            <h5 class="card-title text-truncate mb-1" title="{{ model.title|e }}">{{ model.title|e }}</h5>
+                            <h6 class="card-subtitle mb-2 text-muted text-truncate">by {{ model.author|e }}</h6>
                             <div class="mt-2 mb-2 tags-container">
                                 <div class="tags-inner-container" id="tags-inner-{{ loop.index }}">
                                     {% for tag in model.tags %}
-                                        <span class="badge bg-light text-dark me-1 mb-1">{{ tag }}</span>
+                                        <span class="badge bg-light text-dark me-1 mb-1">{{ tag|e }}</span>
                                     {% endfor %}
                                 </div>
                                 {% if model.tags|length > 0 %}
@@ -206,7 +206,6 @@
 {% block scripts %}
 <script>
 function handleImageError(imgElement) {
-  1
     imgElement.onerror = null; // Prevent infinite loop if placeholder also fails
 }
 function processAllModels() {

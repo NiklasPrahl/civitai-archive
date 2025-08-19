@@ -64,11 +64,11 @@ def generate_global_summary(output_dir, models_dir):
                     
                 model_entry = {
                     # Add model data
-                    'name': model_data.get('name') or 'Unknown',
-                    'author': model_data.get('creator', {}).get('username', 'Unknown'),
+                    'name': html.escape(model_data.get('name') or 'Unknown'),
+                    'author': html.escape(model_data.get('creator', {}).get('username', 'Unknown')),
                     'base_name': base_name,
                     'html_file': f"{base_name}.html",
-                    'tags': model_data.get('tags', []),
+                    'tags': [html.escape(tag) for tag in model_data.get('tags', [])],
                     'has_metadata': bool(model_data), # True if model_data was loaded
                     # Add version data
                     'version_name': version_data.get('name', ''),

@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}{{ metadata.name or model_name }} - Civitai Manager{% endblock %}
+{% block title %}{{ metadata.name|e or model_name }} - Civitai Manager{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <div>
         <h1 class="h2">
             <i class="fas fa-brain me-2"></i>
-            {{ metadata.name or model_name }}
+            {{ metadata.name|e or model_name }}
         </h1>
         <h2 class="h5 text-muted">
-            Version {{ version.name or 'N/A' }} by {{ metadata.creator.name if metadata.creator and metadata.creator.name else 'Unknown' }}
+            Version {{ version.name|e or 'N/A' }} by {{ metadata.creator.name|e if metadata.creator and metadata.creator.name else 'Unknown' }}
         </h2>
     </div>
     <div class="btn-toolbar mb-2 mb-md-0">
@@ -111,11 +111,11 @@
             <div class="card-body">
                 {% if metadata.tags %}
                     {% for tag in metadata.tags %}
-                        <span class="badge bg-light text-dark me-1 mb-1">{{ tag }}</span>
+                        <span class="badge bg-light text-dark me-1 mb-1">{{ tag|e }}</span>
                     {% endfor %}
                 {% elif version.trainedWords %} {# Fallback to trainedWords if metadata.tags is empty #}
                     {% for word in version.trainedWords %}
-                        <span class="badge bg-light text-dark me-1 mb-1">{{ word }}</span>
+                        <span class="badge bg-light text-dark me-1 mb-1">{{ word|e }}</span>
                     {% endfor %}
                 {% else %}
                     <p class="text-muted">No tags available.</p>
@@ -128,7 +128,7 @@
             <div class="card-header"><h5 class="mb-0"><i class="fas fa-comment-dots me-2"></i>Trained Words</h5></div>
             <div class="card-body">
                 {% for word in version.trainedWords %}
-                    <span class="badge bg-light text-dark me-1 mb-1">{{ word }}</span>
+                    <span class="badge bg-light text-dark me-1 mb-1">{{ word|e }}</span>
                 {% endfor %}
             </div>
         </div>
@@ -144,7 +144,7 @@
             </div>
             <div class="card-body">
                 <div id="description-container" class="description-collapsed">
-                    {{ metadata.description|safe if metadata.description else 'No description provided.' }}
+                    {{ metadata.description | safe if metadata.description else 'No description provided.' }}
                 </div>
                 <button id="read-more-btn" class="btn btn-link btn-sm p-0 mt-1">Read more</button>
             </div>
@@ -153,7 +153,7 @@
                     {% set file = version.files[0] %}
                     <div class="row align-items-center">
                         <div class="col-md-6">
-                            <p class="mb-1"><strong>File: </strong><span class="text-break">{{ file.name or 'N/A' }}</span></p>
+                            <p class="mb-1"><strong>File: </strong><span class="text-break">{{ file.name|e or 'N/A' }}</span></p>
                             <p class="mb-0"><strong>Size: </strong>{{ "%.2f"|format(file.sizeKB / 1024) }} MB</p>
                         </div>
                         <div class="col-md-6 text-md-end">
@@ -204,7 +204,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p>Are you sure you want to delete the model '{{ metadata.name or model_name }}'?</p>
+        <p>Are you sure you want to delete the model '{{ metadata.name|e or model_name|e }}'?</p>
         <p>This will remove all associated metadata and preview images.</p>
         <div class="form-check mt-3">
           <input class="form-check-input" type="checkbox" value="" id="deleteModelFileCheckbox">
@@ -216,6 +216,7 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         <form id="deleteForm" action="{{ url_for('delete_model', model_name=model_name) }}" method="POST" style="display: inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="delete_model_file" id="deleteModelFileHiddenInput" value="false">
           <button type="submit" class="btn btn-danger">Delete</button>
         </form>

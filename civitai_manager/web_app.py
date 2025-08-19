@@ -12,6 +12,9 @@ from wtforms.validators import DataRequired
 from werkzeug.utils import secure_filename
 import threading
 import time
+from typing import Dict, Optional
+from datetime import datetime
+import html # Add this import
 
 from civitai_manager.src.core.metadata_manager import (
     process_single_file,
@@ -20,22 +23,65 @@ from civitai_manager.src.core.metadata_manager import (
 from civitai_manager.src.utils.web_helpers import find_model_file_path, load_web_config, save_web_config
 from civitai_manager.src.utils.html_generators.browser_page import generate_global_summary
 from civitai_manager.src.utils.file_tracker import ProcessedFilesManager
+from civitai_manager.src.utils.process_manager import ProcessManager
+from civitai_manager.src.utils.string_utils import sanitize_filename
+
+# Initialize process manager
+process_mgr = ProcessManager()
+
+# Flask app configuration
+ALLOWED_EXTENSIONS = {'safetensors', 'ckpt', 'pt', 'pth', 'bin'}
+ALLOWED_MIMETYPES = ['application/octet-stream']
+ALLOWED_MIMETYPES = ['application/octet-stream']
+ALLOWED_MIMETYPES = ['application/octet-stream']
+ALLOWED_MIMETYPES = ['application/octet-stream']
+ALLOWED_MIMETYPES = ['application/octet-stream']
+ALLOWED_MIMETYPES = ['application/octet-stream']
+CONFIG_FILE = os.environ.get('CONFIG_FILE', os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json')))
+MODELS_DIR = os.environ.get('MODELS_DIR', '')
+OUTPUT_DIR = os.environ.get('OUTPUT_DIR', '')
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
+
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+app.config['CONFIG_FILE'] = CONFIG_FILE
+
+def create_app():
+    from flask_wtf.csrf import CSRFProtect
+    csrf = CSRFProtect(app)
+
+    # Load config to get SECRET_KEY
+    # TODO: For production, SECRET_KEY should be loaded from environment variables or a secure secret management system.
+    current_config = load_web_config(app.config['CONFIG_FILE'])
+    app.config['SECRET_KEY'] = current_config.get('SECRET_KEY', os.urandom(24).hex())
+
+    return app
+
+app = create_app()
 
 processing_thread = None
 cancel_processing_flag = threading.Event()
 
-CONFIG_FILE = os.environ.get('CONFIG_FILE', os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json')))
-MODELS_DIR = os.environ.get('MODELS_DIR', '')
-OUTPUT_DIR = os.environ.get('OUTPUT_DIR', '')
-ALLOWED_EXTENSIONS = {'safetensors', 'ckpt', 'pt', 'pth', 'bin'}
-
-# Uploads werden im Output-Verzeichnis verarbeitet
-UPLOAD_FOLDER = os.path.join(OUTPUT_DIR, 'uploads') if OUTPUT_DIR else 'uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+def is_configured(app_instance):
+    """Check if the application is configured with valid directories"""
+    models_dir = app_instance.config.get('models_directory') # Use 'models_directory' from config
+    output_dir = app_instance.config.get('output_directory') # Use 'output_directory' from config
+    
+    print(f"DEBUG: is_configured check - models_dir: {models_dir}, output_dir: {output_dir}")
+    
+    models_dir_exists = False
+    if models_dir:
+        models_dir_path = Path(models_dir)
+        models_dir_exists = models_dir_path.exists()
+        print(f"DEBUG: models_dir_path: {models_dir_path}, exists: {models_dir_exists}")
+    
+    output_dir_exists = False
+    if output_dir:
+        output_dir_path = Path(output_dir)
+        output_dir_exists = output_dir_path.exists()
+        print(f"DEBUG: output_dir_path: {output_dir_path}, exists: {output_dir_exists}")
+        
+    return (models_dir and output_dir and models_dir_exists and output_dir_exists)
 
 # Initialize default config if not exists
 if not os.path.exists(CONFIG_FILE):
@@ -61,14 +107,49 @@ class ConfigForm(FlaskForm):
 class UploadForm(FlaskForm):
     model_file = FileField('Model File', validators=[
         FileRequired(),
-        FileAllowed(ALLOWED_EXTENSIONS, 'Only SafeTensors, CKPT, PT, PTH, and BIN files are allowed!')
+                                FileAllowed(list(ALLOWED_EXTENSIONS) + ALLOWED_MIMETYPES, 'Only SafeTensors, CKPT, PT, PTH, BIN files and octet-stream mimetype are allowed!')
     ])
     submit = SubmitField('Upload Model')
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
+def load_model_data(model_file, output_dir):
+    """Load the model data from the metadata files"""
+    model_data = {
+        'name': 'Unknown',
+        'type': 'Unknown',
+        'description': 'No description available',
+        'version': {
+            'name': 'Unknown',
+            'baseModel': 'Unknown'
+        }
+    }
+    
+    # Try to load model metadata
+    model_name = Path(model_file).stem
+    model_dir = Path(output_dir) / model_name
+    
+    # Load version data
+    version_file = model_dir / f"{model_name}_civitai_model_version.json"
+    if version_file.exists():
+        try:
+            with open(version_file, 'r') as f:
+                model_data['version'] = json.load(f)
+        except Exception as e:
+            print(f"Error loading version data: {e}")
+            
+    # Load model data
+    model_file = model_dir / f"{model_name}_civitai_model.json"
+    if model_file.exists():
+        try:
+            with open(model_file, 'r') as f:
+                data = json.load(f)
+                model_data.update(data)
+        except Exception as e:
+            print(f"Error loading model data: {e}")
+            
+    return model_data
 
 
 
@@ -76,7 +157,7 @@ def get_models_info():
     """Get information about all models for the dashboard."""
     start_time = time.time()
     print("DEBUG: get_models_info started.")
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
     output_dir = config.get('output_directory')
     models_dir = config.get('models_directory')
 
@@ -95,9 +176,11 @@ def get_models_info():
                 models = json.load(f)
             print(f"DEBUG: Successfully loaded models from summary file. Count: {len(models)}")
             
-            # Post-process models to add local preview image URLs
+            # Post-process models to add local preview image URLs and escape HTML
             for model in models:
                 item = model['base_name'] # This is the sanitized name
+                # Ensure base_name is also HTML escaped for URL generation
+                model['base_name'] = html.escape(item) # Add this line
                 item_path = os.path.join(output_dir, item)
                 local_images = [f for f in os.listdir(item_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
                 if local_images:
@@ -107,6 +190,12 @@ def get_models_info():
                 else:
                     model['preview_image_url'] = url_for('static', filename='placeholder.png')
                     model['has_images'] = False
+                
+                # Explicitly escape HTML for title and author
+                model['title'] = html.escape(model.get('title', ''))
+                model['author'] = html.escape(model.get('author', 'Unknown'))
+                model['tags'] = [html.escape(tag) for tag in model.get('tags', [])]
+
             print(f"DEBUG: Finished post-processing models from summary file. Total time: {time.time() - start_time:.4f} seconds")
             return models
         except Exception as e:
@@ -124,12 +213,12 @@ def get_models_info():
             item_path = os.path.join(output_dir, item)
             if os.path.isdir(item_path):
                 model_info = {
-                    'name': item,
+                    'name': html.escape(item),
                     'path': item_path,
                     'has_metadata': False,
                     'has_images': False,
                     'files': [],
-                    'title': item,
+                    'title': html.escape(item),
                     'author': 'Unknown',
                     'tags': [],
                     'preview_image_url': url_for('static', filename='placeholder.png')
@@ -148,15 +237,20 @@ def get_models_info():
                 
                 if metadata:
                     model_info['title'] = metadata.get('name', item)
+                    # Explicitly escape HTML for title and author
+                    model_info['title'] = html.escape(model_info['title'])
                     if metadata.get('creator') and metadata['creator'].get('name'):
-                        model_info['author'] = metadata['creator']['name']
-                    model_info['tags'] = metadata.get('tags', [])
+                        model_info['author'] = html.escape(metadata['creator']['name'])
+                    model_info['tags'] = [html.escape(tag) for tag in metadata.get('tags', [])]
 
                 # Robustly find local preview image
                 local_images = [f for f in os.listdir(item_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
                 if local_images:
                     model_info['preview_image_url'] = url_for('local_static_files', filename=f'{item}/{sorted(local_images)[0]}')
                     model_info['has_images'] = True
+                else:
+                    model_info['preview_image_url'] = url_for('static', filename='placeholder.png')
+                    model_info['has_images'] = False
 
                 # Get model files from the models directory
                 if models_dir and os.path.exists(models_dir):
@@ -166,7 +260,8 @@ def get_models_info():
                             with open(model_hash_file, 'r') as f:
                                 hash_data = json.load(f)
                                 stored_hash = hash_data.get('hash_value')
-                                stored_filename = hash_data.get('filename')
+                                stored_filename = hash_data.get('name') # This is the original filename, e.g., 'flux_dev.safetensors'
+
                                 if stored_hash and stored_filename:
                                     rel_path = find_model_file_path(models_dir, stored_hash, stored_filename)
                                     if rel_path:
@@ -181,13 +276,45 @@ def get_models_info():
     print(f"DEBUG: Finished direct scan. Total time: {time.time() - start_time:.4f} seconds")
     return models
 
+@app.route('/api/process-status/<process_id>')
+def get_process_status(process_id):
+    """Get the status of a processing task"""
+    status = process_mgr.get_status(process_id)
+    if status:
+        return jsonify({
+            'status': status.status,
+            'filename': status.filename,
+            'progress': status.progress,
+            'error': status.error,
+            'start_time': status.start_time.isoformat(),
+            'end_time': status.end_time.isoformat() if status.end_time else None
+        })
+    return jsonify({'error': 'Process not found'}), 404
+
+@app.route('/api/active-processes')
+def get_active_processes():
+    """Get all active processing tasks"""
+    active = process_mgr.get_all_active()
+    return jsonify([{
+        'process_id': p.filename,
+        'status': p.status,
+        'filename': p.filename,
+        'progress': p.progress,
+        'start_time': p.start_time.isoformat()
+    } for p in active])
+
 @app.route('/')
 @app.route('/page/<int:page>')
 def index(page=1):
     """Main dashboard with pagination"""
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
+    app.config.update(config) # Update app.config with loaded values
     
-    if not config.get('models_directory') or not config.get('output_directory'):
+    if not config or not config.get('models_directory') or not config.get('output_directory'):
+        return redirect(url_for('settings'))
+    
+    # Check if directories exist
+    if not is_configured(app):
         return redirect(url_for('settings'))
     
     models = get_models_info()
@@ -209,7 +336,8 @@ def index(page=1):
 def settings():
     """Settings page"""
     form = ConfigForm()
-    current_config = load_web_config()
+    current_config = load_web_config(app.config['CONFIG_FILE'])
+    app.config.update(current_config) # Update app.config with loaded values
     
     if form.validate_on_submit():
         config_data = {
@@ -220,8 +348,9 @@ def settings():
             'notimeout': form.notimeout.data
         }
         
-        if save_web_config(config_data):
+        if save_web_config(config_data, app.config['CONFIG_FILE']):
             flash('Settings saved successfully!', 'success')
+            app.config.update(config_data) # Update app.config immediately after saving
             return redirect(url_for('settings'))
         else:
             flash('Error saving settings!', 'error')
@@ -240,9 +369,9 @@ def upload():
     """Model upload page"""
     global processing_thread
     form = UploadForm()
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
     
-    if not config.get('models_directory') or not config.get('output_directory'):
+    if not is_configured(app):
         flash('Please configure directories first!', 'error')
         return redirect(url_for('settings'))
     
@@ -262,32 +391,50 @@ def upload():
         print(f"DEBUG: Saving file to {final_path}")
         file.save(final_path)
         
-        def process_upload():
-            global processing_thread
-            print(f"DEBUG: Inside process_upload thread for {filename}")
+        # Add process to manager and queue processing
+        process_id = process_mgr.add_process(filename)
+        
+        def process_upload(process_id: str, file_path: str, output_dir: Path, models_dir: Path, config: Dict):
             try:
-                output_dir = Path(config['output_directory'])
-                process_single_file(
-                    Path(final_path), 
+                process_mgr.update_status(process_id, 'processing', progress=0.0)
+                
+                # Process the file
+                success = process_single_file(
+                    Path(file_path), 
                     output_dir,
                     download_all_images=config.get('download_all_images', True),
                     skip_images=config.get('skip_images', False)
                 )
-                print(f"DEBUG: generate_global_summary called for {filename}")
-                generate_global_summary(Path(output_dir), Path(models_dir))
-                print(f"DEBUG: generate_global_summary finished for {filename}")
+                
+                if success:
+                    process_mgr.update_status(process_id, 'processing', progress=0.5)
+                    # Update global summary
+                    generate_global_summary(Path(output_dir), Path(models_dir))
+                    process_mgr.update_status(process_id, 'completed', progress=1.0)
+                else:
+                    process_mgr.update_status(process_id, 'failed', 
+                                           error="File processing failed")
+                    
             except Exception as e:
-                print(f"ERROR: Error processing uploaded file {filename}: {e}")
-            finally:
-                processing_thread = None
-                print(f"DEBUG: processing_thread set to None for {filename}")
+                error_msg = f"Error processing file: {str(e)}"
+                process_mgr.update_status(process_id, 'failed', error=error_msg)
+                logging.error(f"Error processing {filename}: {error_msg}")
 
-        processing_thread = threading.Thread(target=process_upload)
-        processing_thread.daemon = True
-        processing_thread.start()
-        print(f"DEBUG: Processing thread started for {filename}")
+        # Queue the processing
+        process_mgr.queue_process(
+            process_upload,
+            process_id,
+            final_path,
+            Path(config['output_directory']),
+            Path(models_dir),
+            config
+        )
         
-        return jsonify({'success': True, 'message': f'Model {filename} uploaded successfully! Processing started in the background.'})
+        return jsonify({
+            'success': True, 
+            'message': f'Model {filename} uploaded successfully! Processing started in the background.',
+            'process_id': process_id
+        })
 
     if request.method == 'POST':
         # Handle form validation errors for AJAX request
@@ -300,9 +447,9 @@ def upload():
 def process_all():
     """Process all models in the configured directory"""
     global processing_thread, cancel_processing_flag
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
     
-    if not config.get('models_directory') or not config.get('output_directory'):
+    if not is_configured(app):
         return jsonify({'error': 'Configuration not set'}), 400
     
     def process_all_models_task(): # Renamed to avoid conflict with outer function
@@ -357,10 +504,11 @@ def model_detail(model_name):
     start_time = time.time()
     print(f"DEBUG: Entering model_detail for {model_name} at {start_time}")
 
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
+    output_dir = config.get('output_directory')
     output_dir = config.get('output_directory')
 
-    if not output_dir:
+    if not is_configured(app):
         return redirect(url_for('settings'))
 
     model_path = os.path.join(output_dir, model_name)
@@ -479,7 +627,7 @@ def model_detail(model_name):
 @app.route('/local_static/<path:filename>')
 def local_static_files(filename):
     """Serve static files from the output directory"""
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
     output_dir = config.get('output_directory')
 
     if not output_dir:
@@ -494,7 +642,7 @@ def local_static_files(filename):
 @app.route('/model/<model_name>/delete', methods=['POST'])
 def delete_model(model_name):
     """Delete a model and its associated files."""
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
     output_dir = Path(config.get('output_directory'))
     models_dir = Path(config.get('models_directory'))
     
@@ -545,7 +693,7 @@ def delete_model(model_name):
 
 @app.route('/settings/clear_bin', methods=['POST'])
 def clear_bin():
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
     output_dir = Path(config.get('output_directory'))
     bin_dir = output_dir / '_bin'
     if bin_dir.exists():
@@ -554,8 +702,6 @@ def clear_bin():
     else:
         flash('Bin is already empty.', 'info')
     return redirect(url_for('settings'))
-
-
 
 
 
@@ -569,13 +715,14 @@ def api_models():
 def api_status():
     """API endpoint to get processing status"""
     global processing_thread
-    config = load_web_config()
+    config = load_web_config(app.config['CONFIG_FILE'])
     return jsonify({
-        'configured': bool(config.get('models_directory') and config.get('output_directory')),
+        'configured': is_configured(app),
         'models_directory': config.get('models_directory', ''),
         'output_directory': config.get('output_directory', ''),
         'is_processing': processing_thread and processing_thread.is_alive()
     })
 
 if __name__ == '__main__':
+    app = create_app()
     app.run(debug=True, host='0.0.0.0', port=5000)

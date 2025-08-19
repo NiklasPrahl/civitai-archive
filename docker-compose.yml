@@ -5,14 +5,14 @@ services:
     build: .
     container_name: civitai-manager
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
-      - /path/to/models:/data/models:ro  # Read-only access to model files
+      - ./temp_models:/data/models:ro  # Read-only access to model files
       - civitai_output:/data/output      # Persistent volume for metadata
       - civitai_uploads:/data/uploads    # Persistent volume for uploads
+      - ./config:/app/config           # Persistent volume for config file
     environment:
-      - FLASK_APP=civitai_manager/web_app.py
-      - FLASK_ENV=production
+      - CONFIG_FILE=/app/config/config.json
     restart: unless-stopped
 
 volumes:

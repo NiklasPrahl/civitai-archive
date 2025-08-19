@@ -230,19 +230,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Suggest common paths
     modelsDir.addEventListener('focus', function() {
         if (!this.value) {
-            this.placeholder = '/home/user/models or C:\Users\User\Models';
+            this.placeholder = '/home/user/models';
         }
     });
     
     outputDir.addEventListener('focus', function() {
         if (!this.value) {
-            this.placeholder = '/home/user/civitai_output or C:\Users\User\CivitaiOutput';
+            this.placeholder = '/home/user/civitai_output';
         }
     });
     
     // Validate paths on blur
     modelsDir.addEventListener('blur', function() {
-        if (this.value && !this.value.startsWith('/') && !this.value.includes(':\')) {
+        if (this.value && !this.value.startsWith('/') && !this.value.includes(':\\')) {
             this.classList.add('is-invalid');
         } else {
             this.classList.remove('is-invalid');
@@ -250,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     outputDir.addEventListener('blur', function() {
-        if (this.value && !this.value.startsWith('/') && !this.value.includes(':\')) {
+        if (this.value && !this.value.startsWith('/') && !this.value.includes(':\\')) {
             this.classList.add('is-invalid');
         } else {
             this.classList.remove('is-invalid');

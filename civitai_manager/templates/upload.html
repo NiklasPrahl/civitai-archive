@@ -165,13 +165,13 @@
                             <div class="text-muted small" id="uploadStats"></div>
                             <div id="processingSpinner" class="d-none ms-2">
                                 <div class="spinner-border text-success" role="status" style="width: 1.5rem; height: 1.5rem;">
-                                    <span class="visually-hidden">Verarbeitung läuft ...</span>
+                                    <span class="visually-hidden">Processing...</span>
                                 </div>
                             </div>
                         </div>
                         <div id="uploadSuccessAlert" class="alert alert-success d-none mt-3 mb-0" role="alert">
                             <i class="fas fa-check-circle me-2"></i>
-                            Upload erfolgreich! Modell wird verarbeitet ...
+                            Upload successful! Model is being processed ...
                         </div>
                     </div>
                 </div>
@@ -381,23 +381,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     progressBar.classList.add('bg-success');
                     progressBar.style.width = '100%';
                     progressBar.querySelector('span').textContent = '100%';
-                    progressTitle.textContent = 'Upload abgeschlossen';
+                    progressTitle.textContent = 'Upload completed';
                     progressText.textContent = '';
                     uploadStats.textContent = '';
                     document.getElementById('uploadSuccessAlert').classList.remove('d-none');
                     document.getElementById('processingSpinner').classList.remove('d-none');
                     // Poll for processing status
                     const interval = setInterval(() => {
-                        fetch('/api/status')
+                        fetch(`/api/process-status/${response.process_id}`)
                             .then(response => response.json())
                             .then(data => {
-                                if (!data.is_processing) {
+                                if (data.status === 'completed' || data.status === 'failed') {
                                     clearInterval(interval);
                                     document.getElementById('processingSpinner').classList.add('d-none');
-                                    progressTitle.textContent = 'Fertig!';
-                                    progressText.textContent = 'Das Modell wurde verarbeitet.';
+                                    if (data.status === 'completed') {
+                                        progressTitle.textContent = 'Finished!';
+                                        progressText.textContent = 'The model has been processed.';
+                                    } else {
+                                        progressTitle.textContent = 'Error!';
+                                        progressText.textContent = `Processing failed: ${data.error || 'Unknown Error'}`;
+                                        progressBar.classList.add('bg-danger');
+                                    }
                                     setTimeout(() => {
-                                        // Progress-Bar ausblenden, Formular wieder anzeigen, Felder zurücksetzen
+                                        // Hide progress bar, show form again, reset fields
                                         document.getElementById('uploadSuccessAlert').classList.add('d-none');
                                         uploadProgress.classList.add('d-none');
                                         form.reset();
@@ -413,10 +419,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                         uploadButton.disabled = true;
                                         uploadButton.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Model';
                                     }, 2000);
-                                } else {
-                                    progressTitle.textContent = 'Verarbeitung läuft ...';
+                                } else if (data.status === 'processing') {
+                                    progressTitle.textContent = 'Processing...';
                                     progressText.textContent = '';
                                     uploadStats.textContent = '';
+                                    // Update progress bar if progress is available
+                                    if (data.progress !== undefined) {
+                                        const percent = Math.round(data.progress * 100);
+                                        progressBar.style.width = percent + '%';
+                                        progressBar.querySelector('span').textContent = percent + '%';
+                                    }
                                 }
                             })
                             .catch(error => {
@@ -425,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 progressText.innerHTML = '<div class="alert alert-danger mt-2">Error checking processing status.</div>';
                                 progressBar.classList.add('bg-danger');
                                 uploadProgress.classList.remove('d-none');
-                                uploadForm.classList.add('d-none');
+                                // uploadForm.classList.add('d-none'); // Keep form hidden on polling error
                             });
                     }, 2000);
                 } else {

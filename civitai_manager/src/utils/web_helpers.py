@@ -3,7 +3,7 @@ import json
 
 from civitai_manager.src.utils.string_utils import calculate_sha256
 
-CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'config.json'))
+CONFIG_FILE = os.environ.get('CONFIG_FILE', os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'config.json')))
 
 def find_model_file_path(models_dir, stored_hash, stored_filename):
     """
@@ -24,11 +24,17 @@ def find_model_file_path(models_dir, stored_hash, stored_filename):
 
     return None
 
-def load_web_config():
+def load_web_config(config_file_path=None):
+    print(f"DEBUG: Attempting to load config from: {config_file_path}")
+    if config_file_path is None:
+        config_file_path = CONFIG_FILE
+        print(f"DEBUG: config_file_path was None, defaulting to: {config_file_path}")
     try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
+        if os.path.exists(config_file_path):
+            print(f"DEBUG: Config file exists at: {config_file_path}")
+            with open(config_file_path, 'r') as f:
                 config = json.load(f)
+                print(f"DEBUG: Successfully loaded config: {config}")
                 
                 if 'models_directory' not in config:
                     config['models_directory'] = ''
@@ -42,16 +48,25 @@ def load_web_config():
                     config['skip_images'] = False
                 
                 return config
+        else:
+            print(f"DEBUG: Config file does NOT exist at: {config_file_path}")
     except Exception as e:
-        print(f"DEBUG: Error loading config: {e}")
+        print(f"ERROR: Error loading config from {config_file_path}: {e}")
     return {}
 
-def save_web_config(config):
-    """Save configuration for web interface"""
+def save_web_config(config, config_file_path=None):
+    print(f"DEBUG: Attempting to save config to: {config_file_path}")
+    print(f"DEBUG: Config data to save: {config}")
+    if config_file_path is None:
+        config_file_path = CONFIG_FILE
+        print(f"DEBUG: config_file_path was None, defaulting to: {config_file_path}")
     try:
-        with open(CONFIG_FILE, 'w') as f:
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
+        with open(config_file_path, 'w') as f:
             json.dump(config, f, indent=2)
+        print(f"DEBUG: Successfully saved config to: {config_file_path}")
         return True
     except Exception as e:
-        print(f"Error saving config: {e}")
+        print(f"ERROR: Error saving config to {config_file_path}: {e}")
         return False

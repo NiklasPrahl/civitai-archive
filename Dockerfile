@@ -21,11 +21,10 @@ RUN mkdir -p /data/models /data/output
 # Set environment variables
 ENV MODELS_DIR=/data/models
 ENV OUTPUT_DIR=/data/output
-ENV FLASK_APP=civitai_manager/web_app.py
-ENV FLASK_ENV=production
+ENV CONFIG_FILE=/app/config/config.json
 
 # Expose port
 EXPOSE 5000
 
 # Start the application
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "civitai_manager.web_app:app"]

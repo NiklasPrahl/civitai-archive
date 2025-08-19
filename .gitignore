@@ -36,3 +36,5 @@ ENV/
 # Tests
 test/
 config.json
+.DS_Store
+.coverage
