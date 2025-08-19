@@ -2,6 +2,8 @@
 
 A lightweight web ui for local management, backup, and organization of SafeTensors model metadata from Civitai.
 
+IMPORTANT: This project is currently in early development!
+
 ## Features
 
 - **Web Interface**: Modern web interface for easy management
