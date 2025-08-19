@@ -197,7 +197,16 @@ def get_models_info():
                 model['tags'] = [html.escape(tag) for tag in model.get('tags', [])]
 
             print(f"DEBUG: Finished post-processing models from summary file. Total time: {time.time() - start_time:.4f} seconds")
-            return models
+            
+            # Calculate model type counts and total size
+            model_type_counts = {}
+            total_size_kb = 0
+            for model in models:
+                model_type_counts[model.get('type', 'Unknown')] = model_type_counts.get(model.get('type', 'Unknown'), 0) + 1
+                total_size_kb += model.get('file_size', 0)
+            total_size_gb = total_size_kb / (1024 * 1024) # Convert KB to GB
+
+            return models, model_type_counts, total_size_gb
         except Exception as e:
             print(f"ERROR: Failed to load or parse summary file: {e}. Falling back to direct scan.")
             # Fallback to direct scan if summary file fails
@@ -270,11 +279,20 @@ def get_models_info():
                             print(f"ERROR: Error finding model file for {item}: {e}")
 
                 models.append(model_info)
+        
+        # Calculate model type counts and total size for direct scan
+        model_type_counts = {}
+        total_size_kb = 0
+        for model in models:
+            model_type_counts[model.get('type', 'Unknown')] = model_type_counts.get(model.get('type', 'Unknown'), 0) + 1
+            total_size_kb += model.get('file_size', 0)
+        total_size_gb = total_size_kb / (1024 * 1024) # Convert KB to GB
+
+        print(f"DEBUG: Finished direct scan. Total time: {time.time() - start_time:.4f} seconds")
+        return models, model_type_counts, total_size_gb
     except Exception as e:
         print(f"ERROR: Error reading models directory during direct scan: {e}")
-
-    print(f"DEBUG: Finished direct scan. Total time: {time.time() - start_time:.4f} seconds")
-    return models
+        return [], {}, 0
 
 @app.route('/api/process-status/<process_id>')
 def get_process_status(process_id):
@@ -317,7 +335,7 @@ def index(page=1):
     if not is_configured(app):
         return redirect(url_for('settings'))
     
-    models = get_models_info()
+    models, model_type_counts, total_size_gb = get_models_info()
     per_page = 20  # Number of models per page
     total = len(models)
     start_idx = (page - 1) * per_page
@@ -330,7 +348,9 @@ def index(page=1):
                          models=paginated_models,
                          total_models=total,
                          current_page=page,
-                         total_pages=total_pages)
+                         total_pages=total_pages,
+                         model_type_counts=model_type_counts,
+                         total_size_gb=total_size_gb)
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():

@@ -65,6 +65,7 @@ def generate_global_summary(output_dir, models_dir):
                 model_entry = {
                     # Add model data
                     'name': html.escape(model_data.get('name') or 'Unknown'),
+                    'type': model_type,
                     'author': html.escape(model_data.get('creator', {}).get('username', 'Unknown')),
                     'base_name': base_name,
                     'html_file': f"{base_name}.html",
