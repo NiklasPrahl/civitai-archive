@@ -10,7 +10,7 @@
             {{ metadata.name|e or model_name }}
         </h1>
         <h2 class="h5 text-muted">
-            Version {{ version.name|e or 'N/A' }} by {{ metadata.creator.name|e if metadata.creator and metadata.creator.name else 'Unknown' }}
+            Version {{ version.name|e or 'N/A' }} by {{ metadata.creator.username|e if metadata.creator and metadata.creator.username else 'Unknown' }}
         </h2>
     </div>
     <div class="btn-toolbar mb-2 mb-md-0">
@@ -157,8 +157,9 @@
                             <p class="mb-0"><strong>Size: </strong>{{ "%.2f"|format(file.sizeKB / 1024) }} MB</p>
                         </div>
                         <div class="col-md-6 text-md-end">
-                            {% if version.downloadUrl %}
-                                <a href="{{ version.downloadUrl }}" target="_blank" class="btn btn-success btn-sm">
+                            {% if model_files and model_files[0] %}
+                                {% set local_file_path = model_files[0] %}
+                                <a href="{{ url_for('local_model_files', filename=local_file_path) }}" target="_blank" class="btn btn-success btn-sm">
                                     <i class="fas fa-download me-1"></i> Download
                                 </a>
                             {% endif %}

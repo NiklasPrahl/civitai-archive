@@ -43,7 +43,7 @@ OUTPUT_DIR = os.environ.get('OUTPUT_DIR', '')
 
 app = Flask(__name__)
 
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024
 app.config['CONFIG_FILE'] = CONFIG_FILE
 
 def create_app():
@@ -370,6 +370,7 @@ def upload():
     global processing_thread
     form = UploadForm()
     config = load_web_config(app.config['CONFIG_FILE'])
+    app.config.update(config) # Update app.config with loaded values
     
     if not is_configured(app):
         flash('Please configure directories first!', 'error')
@@ -637,6 +638,21 @@ def local_static_files(filename):
         return send_from_directory(output_dir, filename)
     except Exception as e:
         print(f"DEBUG: Error serving file {filename} from {output_dir}: {e}")
+        return '', 404
+
+@app.route('/local_models/<path:filename>')
+def local_model_files(filename):
+    """Serve model files from the models directory"""
+    config = load_web_config(app.config['CONFIG_FILE'])
+    models_dir = config.get('models_directory')
+
+    if not models_dir:
+        return '', 404
+
+    try:
+        return send_from_directory(models_dir, filename)
+    except Exception as e:
+        print(f"DEBUG: Error serving file {filename} from {models_dir}: {e}")
         return '', 404
 
 @app.route('/model/<model_name>/delete', methods=['POST'])
