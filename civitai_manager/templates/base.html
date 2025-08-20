@@ -143,6 +143,7 @@
             color: #333 !important; /* Dark gray for better contrast */
         }
     </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
     <div class="container-fluid">
@@ -201,7 +202,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     {% block scripts %}
-        {{ super() }}
         <script>
         document.addEventListener('DOMContentLoaded', function() {
           setTimeout(function() {

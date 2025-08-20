@@ -2,7 +2,44 @@
 
 {% block title %}{{ metadata.name|e or model_name }} - Civitai Archive{% endblock %}
 
+{% block extra_head %}
+    <!-- Swiper CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css" />
+{% endblock %}
+
 {% block content %}
+<style>
+    /* Make the preview card body fill available height */
+    .col-lg-8 .card { display: flex; flex-direction: column; }
+        .col-lg-8 .card .card-body { flex: 1; display: flex; overflow: hidden; }
+
+    /* Swiper container fills body */
+    #previewCarousel.swiper { width: 100%; height: 100%; }
+    #previewCarousel .swiper-wrapper { height: 100%; align-items: center; }
+    #previewCarousel .swiper-slide { height: 100%; display: flex; align-items: center; justify-content: center; }
+    #previewCarousel .swiper-slide .position-relative { width: 100%; height: 100%; }
+
+    /* Media scales to touch either width or height with no extra margins */
+    #previewCarousel .swiper-slide img,
+    #previewCarousel .swiper-slide video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* portrait: touches top/bottom; landscape: touches left/right */
+        object-position: center center;
+        display: block;
+    }
+
+    /* Keep NSFW badge visible */
+    #previewCarousel .badge { pointer-events: none; }
+
+    /* Optional: adjust pagination placement slightly inside */
+    #previewCarousel .swiper-pagination { bottom: 8px; }
+
+    @media (max-width: 991px) {
+        /* On small screens let the preview take a reasonable height */
+        #previewCarousel.swiper { min-height: 260px; }
+    }
+</style>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <div>
         <h1 class="h2">
@@ -32,38 +69,42 @@
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-images me-2"></i>Preview Images</h5>
             </div>
-            <div class="card-body" style="overflow-y: auto; flex-grow: 1;">
-                {% if version.images %}
-                <div class="row row-cols-1 row-cols-lg-2 g-3 p-3"> {# 1 col on small, 2 on large screens, p-3 for padding #}
-                    {% for image in version.images %}
-                    <div class="col">
-                        <div class="card bg-light shadow-sm h-100">
-                            {% if image.local_url.endswith(('.mp4', '.webm', '.ogg')) %}
-                                <video class="img-fluid" controls style="border-radius: var(--bs-card-inner-border-radius);">
-                                    <source src="{{ image.local_url }}" type="video/mp4">
-                                    Your browser does not support the video tag.
-                                </video>
-                            {% else %}
-                                <a href="{{ image.local_url }}" target="_blank" title="Click to open full image">
-                                    <img src="{{ image.local_url or url_for('static', filename='placeholder.png') }}" class="img-fluid" alt="Preview image {{ loop.index }}" style="border-radius: var(--bs-card-inner-border-radius);">
-                                </a>
-                            {% endif %}
-                            
-                            {% if image.nsfw %}
-                            <div class="card-img-overlay d-flex justify-content-end align-items-start p-2">
-                                <span class="badge bg-danger">NSFW</span>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                    <div class="text-center py-5">
-                        <i class="fas fa-image fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No preview images available</h5>
-                    </div>
-                {% endif %}
+            <div class="card-body p-0">
+                                                                {% if version.images %}
+                                                                                                <div class="swiper" id="previewCarousel">
+                                                                    <div class="swiper-wrapper">
+                                                                        {% for image in version.images %}
+                                                                        <div class="swiper-slide">
+                                                                                                            <div class="position-relative w-100 h-100">
+                                                                                                                {% if image.local_url.endswith((".mp4", ".webm", ".ogg")) %}
+                                                                                                                    <video class="preview-media" controls>
+                                                                                        <source src="{{ image.local_url }}" type="video/mp4">
+                                                                                        Your browser does not support the video tag.
+                                                                                    </video>
+                                                                                                                        {% else %}
+                                                                                                                            <img src="{{ image.local_url or url_for('static', filename='placeholder.png') }}" alt="Preview image {{ loop.index }}" class="preview-media">
+                                                                                                                        {% endif %}
+                                                                                {% if image.nsfw %}
+                                                                                <div class="position-absolute top-0 end-0 p-2">
+                                                                                    <span class="badge bg-danger">NSFW</span>
+                                                                                </div>
+                                                                                {% endif %}
+                                                                            </div>
+                                                                        </div>
+                                                                        {% endfor %}
+                                                                    </div>
+                                                                    <!-- Pagination bullets -->
+                                                                    <div class="swiper-pagination"></div>
+                                                                    <!-- Navigation buttons -->
+                                                                    <div class="swiper-button-prev"></div>
+                                                                    <div class="swiper-button-next"></div>
+                                                                </div>
+                                {% else %}
+                                    <div class="text-center py-5">
+                                            <i class="fas fa-image fa-3x text-muted mb-3"></i>
+                                            <h5 class="text-muted">No preview images available</h5>
+                                    </div>
+                                {% endif %}
             </div>
         </div>
     </div>
@@ -196,6 +237,33 @@
 {% endblock %}
 
 {% block scripts %}
+{{ super() }}
+<!-- Swiper JS -->
+<script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const el = document.querySelector('#previewCarousel.swiper');
+        if (el) {
+            new Swiper(el, {
+                loop: false,
+                slidesPerView: 1,
+                spaceBetween: 10,
+                centeredSlides: true,
+                navigation: {
+                    nextEl: '.swiper-button-next',
+                    prevEl: '.swiper-button-prev',
+                },
+                pagination: {
+                    el: '.swiper-pagination',
+                    clickable: true,
+                },
+                keyboard: {
+                    enabled: true,
+                },
+            });
+        }
+    });
+</script>
 <!-- Delete Modal -->
 <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
   <div class="modal-dialog">
