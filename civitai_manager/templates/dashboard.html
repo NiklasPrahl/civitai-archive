@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Civitai Manager{% endblock %}
+{% block title %}Dashboard - Civitai Archive{% endblock %}
 
 {% block content %}
 <style>
@@ -57,8 +57,92 @@
 #modelTypeChart { height: 280px !important; max-height: 280px !important; }
 /* 2x2 KPI grid that fills left column height */
 .kpi-grid { display:grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: .75rem; height: 100%; }
+
+/* Hover effects for small tiles (compact + KPI) and grid view cards */
+.kpi-card,
+.compact-tile,
+.dist-card,
+.list-card,
+#gridView .card {
+    transition: transform .16s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease;
+}
+#gridView .card { cursor: pointer; }
+.kpi-card:hover, .kpi-card:focus-within,
+.compact-tile:hover, .compact-tile:focus-within,
+.dist-card:hover, .dist-card:focus-within,
+.list-card:hover, .list-card:focus-within,
+#gridView .card:hover, #gridView .card:focus-within {
+    transform: translateY(-2px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+}
+/* Subtle image lift on grid cards */
+#gridView .card .card-img-top { transition: transform .25s ease; }
+#gridView .card:hover .card-img-top { transform: scale(1.02); }
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .kpi-card, .compact-tile, .dist-card, .list-card, #gridView .card, #gridView .card .card-img-top { transition: none; }
+    .kpi-card:hover, .compact-tile:hover, .dist-card:hover, .list-card:hover, #gridView .card:hover { transform: none; }
+}
+
+/* List view header + cards (grid-aligned columns) */
+.list-header {
+    display: grid;
+    grid-template-columns: 120px 2.2fr 0.8fr 1.2fr 1fr 1fr;
+    gap: 1rem;
+    align-items: center;
+    font-size: .8rem;
+    color: #6c757d;
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: .7rem 1.1rem;
+    margin-bottom: .5rem;
+}
+.list-header > div:not(:first-child):not(:nth-child(2)) {
+    text-align: center;
+}
+.list-card {
+    border: 0; background: #fff; border-radius: 12px; box-shadow: 0 .25rem .5rem rgba(0,0,0,.05);
+    padding: 0.3rem 1.1rem; display: grid;
+    grid-template-columns: 120px 2.2fr 0.8fr 1.2fr 1fr 1fr;
+    gap: 1rem; align-items: center;
+    min-height: 126px;
+}
+.list-card .lc-thumb {
+    width: 120px; height: 120px; border-radius: 10px; object-fit: cover; object-position: center; background-color: #f0f0f0;
+    margin: 0;
+    align-self: center;
+    justify-self: center;
+}
+.list-card .title { font-weight: 600; }
+.list-card .lc-name { min-width: 220px; max-width: 520px; align-self: center; }
+.list-card .lc-type, .list-card .lc-files, .list-card .lc-status { display:flex; flex-wrap: wrap; align-items:center; gap: .35rem; justify-content: center; align-self: center; }
+.list-card .lc-files small { max-width: 260px; }
+.list-card .actions { min-width: 120px; display:flex; justify-content:center; align-self: center; }
+@media (max-width: 992px) {
+    .list-header, .list-card { grid-template-columns: 72px 1.4fr .9fr 1.1fr auto; }
+    .list-header .col-actions { display:none; }
+    .list-card .actions { grid-column: 5; }
+    .list-card .lc-thumb { width: 72px; height: 72px; }
+}
+@media (max-width: 768px) {
+    .list-header { display: none !important; }
+    .list-card { grid-template-columns: 56px 1fr; gap: .75rem; }
+    .list-card .lc-type, .list-card .lc-files, .list-card .lc-status, .list-card .actions { grid-column: span 2; }
+    .list-card .actions { justify-content: flex-start; }
+    .list-card .lc-thumb { width: 56px; height: 56px; }
+}
+
+/* Ensure both header icon buttons have identical dimensions */
+#statsCollapseBtn, #viewToggleBtn {
+    width: 2.25rem; /* ~36px */
+    height: 2.25rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
 </style>
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-1 mb-2 border-bottom">
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-1 mb-4 border-bottom">
     <h1 class="h2">
         <i class="fas fa-tachometer-alt me-2"></i>
         Dashboard
@@ -90,7 +174,7 @@
     <div class="card-header d-flex align-items-center justify-content-between py-2">
         <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Model Statistics</h5>
         <div class="ms-auto">
-            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#modelStatsCollapse" aria-expanded="false" aria-controls="modelStatsCollapse">
+            <button class="btn btn-outline-secondary btn-sm" id="statsCollapseBtn" type="button" data-bs-toggle="collapse" data-bs-target="#modelStatsCollapse" aria-expanded="false" aria-controls="modelStatsCollapse">
                 <i class="fas fa-chevron-right" id="statsCollapseIcon"></i>
             </button>
         </div>
@@ -258,7 +342,7 @@
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card h-100 border-0 bg-light shadow-sm">
+                <div class="card h-100 border-0 bg-light shadow-sm dist-card">
                     <div class="card-body pt-2">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Distribution</h6>
@@ -288,81 +372,108 @@
     <div class="card-body">
         {% if models %}
             <div id="listView" class="view-container">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Model Name</th>
-                                <th>Type</th>
-                                <th>Files</th>
-                                <th>Details</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for model in models %}
-                            <tr>
-                                <td>
-                                    <strong>{{ model.name|e }}</strong>
-                                </td>
-                                <td>
-                                    <span class="badge bg-secondary">{{ model.type|e or 'Unknown' }}</span>
-                                </td>
-                                <td>
-                                    {% if model.files %}
-                                        <span class="badge bg-info">{{ model.files|length }} file(s)</span>
-                                        <small class="d-block text-muted">
-                                            {% for file in model.files[:3] %}
-                                                {{ file|e }}{% if not loop.last %}, {% endif %}
-                                            {% endfor %}
-                                            {% if model.files|length > 3 %}...{% endif %}
-                                        </small>
-                                    {% else %}
-                                        <span class="badge bg-warning">No files</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="mb-1">
-                                        {% if model.has_metadata %}
-                                            <span class="badge bg-success">
-                                                <i class="fas fa-check me-1"></i> Metadata
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-danger">
-                                                <i class="fas fa-times me-1"></i> Metadata
-                                            </span>
-                                        {% endif %}
-                                    </div>
-                                    <div>
-                                        {% if model.has_images %}
-                                            <span class="badge bg-success">
-                                                <i class="fas fa-check me-1"></i> Images
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-warning">
-                                                <i class="fas fa-times me-1"></i> Images
-                                            </span>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('model_detail', model_name=model.base_name) }}" 
-                                       class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-eye me-1"></i>
-                                        Details
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="list-header">
+                    <div></div>
+                    <div>Model Name</div>
+                    <div style="text-align: center;">Type</div>
+                    <div style="text-align: center;">Versionen</div>
+                    <div style="text-align: center;">Status</div>
+                    <div class="col-actions" style="text-align: center;"></div>
+                </div>
+                <div class="d-flex flex-column gap-3">
+                    {% for model in models %}
+                    <div class="list-card position-relative">
+                        <div style="display: flex; align-items: center; justify-content: center;">
+                            <img src="{{ model.preview_image_url }}" alt="{{ model.title|e }}" class="lc-thumb" style="width: 120px; height: 120px; border-radius: 8px; object-fit: cover; object-position: center; margin-bottom: 4px; margin-top: 4px;" onerror="handleImageError(this)">
+                        </div>
+                        <div class="lc-name text-truncate" title="{{ model.title|e }}">
+                                <strong class="title">{{ model.title|e }}</strong>
+                                <div class="text-muted small">by {{ model.author|e }}</div>
+                            </div>
+                            <div class="lc-type">
+                                <span class="badge bg-secondary">{{ model.type|e or 'Unknown' }}</span>
+                            </div>
+                            <div class="lc-files">
+                                {% if model.versions %}
+                                    {% for version in model.versions %}
+                                        <span class="badge bg-info me-1 mb-1">{{ version.name|e }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="badge bg-warning">Keine Versionen</span>
+                                {% endif %}
+                            </div>
+                            <div class="lc-status meta">
+                                {% if model.has_metadata %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i> Metadata
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-times me-1"></i> Metadata
+                                    </span>
+                                {% endif %}
+                                {% if model.has_images %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i> Images
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-times me-1"></i> Images
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div class="actions d-flex flex-column align-items-stretch gap-1" style="position: relative; z-index: 10;">
+                                <a href="{{ url_for('model_detail', model_name=model.base_name) }}" class="btn btn-sm btn-outline-primary mb-1 w-100">
+                                    <i class="fas fa-eye me-1"></i>
+                                    Details
+                                </a>
+                                {% if model.files %}
+                                <button type="button" class="btn btn-sm btn-outline-info w-100" data-bs-toggle="modal" data-bs-target="#filesModal-{{ loop.index }}">
+                                    <i class="fas fa-file me-1"></i> Files
+                                </button>
+                                {% endif %}
+                            </div>
+                        <!-- Stretched-link nur für den Rest der Karte, nicht die Actions -->
+                        <div class="stretched-link-overlay" style="position: absolute; top: 0; left: 0; right: 140px; bottom: 0; z-index: 5;">
+                            <a href="{{ url_for('model_detail', model_name=model.base_name) }}" class="stretched-link" aria-label="View details for {{ model.title|e }}"></a>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                {# Alle File-Modals nach dem Loop, damit sie nicht in der Kachel liegen #}
+                {% for model in models %}
+                    {% if model.files %}
+                    <div class="modal fade" id="filesModal-{{ loop.index0 + 1 }}" tabindex="-1" aria-labelledby="filesModalLabel-{{ loop.index0 + 1 }}" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="filesModalLabel-{{ loop.index0 + 1 }}">Heruntergeladene Dateien</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <ul class="list-group">
+                                        {% for file in model.files %}
+                                            <li class="list-group-item">
+                                                <span class="text-monospace">{{ file|e }}</span>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
                 </div>
             </div>
 
             <div id="gridView" class="row view-container d-none">
                 {% for model in models %}
                 <div class="col-md-4 mb-4">
-                    <div class="card h-100 shadow-sm">
+                    <div class="card h-100 shadow-sm position-relative">
                         <img src="{{ model.preview_image_url }}" class="card-img-top" alt="{{ model.title|e }}" style="height: 250px; object-fit: cover; object-position: top;" onerror="handleImageError(this)">
                         <div class="card-body d-flex flex-column">
                             <h5 class="card-title text-truncate mb-1" title="{{ model.title|e }}">{{ model.title|e }}</h5>
@@ -374,10 +485,10 @@
                                     {% endfor %}
                                 </div>
                                 {% if model.tags|length > 0 %}
-                                    <span class="badge bg-light text-secondary view-more-tags-btn d-none" data-bs-toggle="collapse" data-bs-target="#tags-inner-{{ loop.index }}" aria-expanded="false" aria-controls="tags-inner-{{ loop.index }}">
+                                    <span class="badge bg-light text-secondary view-more-tags-btn d-none">
                                         +<span class="remaining-tags-count"></span> more
                                     </span>
-                                    <span class="badge bg-light text-secondary view-less-tags-btn d-none" data-bs-toggle="collapse" data-bs-target="#tags-inner-{{ loop.index }}" aria-expanded="true" aria-controls="tags-inner-{{ loop.index }}">
+                                    <span class="badge bg-light text-secondary view-less-tags-btn d-none">
                                         Show less
                                     </span>
                                 {% endif %}
@@ -387,6 +498,7 @@
                                     <i class="fas fa-eye me-1"></i> Details
                                 </a>
                             </div>
+                            <a href="{{ url_for('model_detail', model_name=model.base_name) }}" class="stretched-link" aria-label="View details for {{ model.title|e }}"></a>
                         </div>
                     </div>
                 </div>
@@ -594,78 +706,93 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Handle dynamic tag display based on line count
-    function adjustTagsDisplay() {
-        document.querySelectorAll('.tags-container').forEach((container, index) => {
-            const innerContainer = container.querySelector('.tags-inner-container');
-            const viewMoreBtn = container.querySelector('.view-more-tags-btn');
-            const viewLessBtn = container.querySelector('.view-less-tags-btn');
-            const allTags = innerContainer.querySelectorAll('.badge');
+    // Deterministic tag toggle: max two rows collapsed -> +x more; expand -> Show less
+    function setupGridTags() {
+        document.querySelectorAll('.tags-container').forEach((container) => {
+            if (container.dataset.tagsInitialized === 'true') return; // guard
+            const inner = container.querySelector('.tags-inner-container');
+            const tags = Array.from(inner.querySelectorAll('.badge'));
+            const moreBtn = container.querySelector('.view-more-tags-btn');
+            const lessBtn = container.querySelector('.view-less-tags-btn');
+            if (!tags.length || !moreBtn || !lessBtn) return;
 
-            // Reset display for measurement
-            innerContainer.style.maxHeight = 'none';
-            innerContainer.style.overflow = 'visible';
-            viewMoreBtn.classList.add('d-none');
-            viewLessBtn.classList.add('d-none');
-
-            // Calculate line height (approximate)
-            const lineHeight = parseFloat(getComputedStyle(allTags[0]).lineHeight) || 20; // Default to 20px if not found
-
-            // Determine if overflow
-            const maxVisibleHeight = lineHeight * 2.5; // Allow for 2 lines + some padding
-
-            if (innerContainer.offsetHeight > maxVisibleHeight) {
-                // Hide overflow
-                innerContainer.style.maxHeight = `${maxVisibleHeight}px`;
-                innerContainer.style.overflow = 'hidden';
-                viewMoreBtn.classList.remove('d-none');
-
-                // Calculate remaining tags (approximate)
-                let visibleTagsCount = 0;
-                let currentHeight = 0;
-                for (let i = 0; i < allTags.length; i++) {
-                    currentHeight += allTags[i].offsetHeight;
-                    if (currentHeight <= maxVisibleHeight) {
-                        visibleTagsCount++;
-                    } else {
-                        break;
-                    }
+            function applyCollapsedTwoRows() {
+                // Show all to measure row breaks
+                tags.forEach(el => el.classList.remove('d-none'));
+                // If container not visible (e.g., grid hidden), skip to avoid wrong measurements
+                if (container.offsetParent === null) {
+                    // Hide show-less, hide more to avoid +0; will recompute on show
+                    moreBtn.classList.add('d-none');
+                    lessBtn.classList.add('d-none');
+                    container.dataset.expanded = 'false';
+                    return;
                 }
-                const remainingCount = allTags.length - visibleTagsCount;
-                container.querySelector('.remaining-tags-count').textContent = remainingCount;
-
-            } else {
-                // No overflow, ensure all are visible
-                innerContainer.style.maxHeight = 'none';
-                innerContainer.style.overflow = 'visible';
-                viewMoreBtn.classList.add('d-none');
-                viewLessBtn.classList.add('d-none');
+                let firstTop = null;
+                let secondTop = null;
+                let cutoffIndex = tags.length;
+                for (let i = 0; i < tags.length; i++) {
+                    const top = tags[i].offsetTop;
+                    if (firstTop === null) firstTop = top;
+                    else if (secondTop === null && top > firstTop + 1) secondTop = top;
+                    else if (secondTop !== null && top > secondTop + 1) { cutoffIndex = i; break; }
+                }
+                if (cutoffIndex < tags.length) {
+                    for (let i = cutoffIndex; i < tags.length; i++) tags[i].classList.add('d-none');
+                    const remaining = tags.length - cutoffIndex;
+                    const countEl = moreBtn.querySelector('.remaining-tags-count');
+                    if (countEl) countEl.textContent = remaining;
+                    moreBtn.classList.remove('d-none');
+                } else {
+                    moreBtn.classList.add('d-none');
+                }
+                lessBtn.classList.add('d-none');
+                container.dataset.expanded = 'false';
             }
 
-            // Attach collapse event listeners for dynamic buttons
-            const collapseInstance = new bootstrap.Collapse(innerContainer, { toggle: false });
+            function applyExpanded() {
+                tags.forEach((el) => el.classList.remove('d-none'));
+                moreBtn.classList.add('d-none');
+                lessBtn.classList.remove('d-none');
+                container.dataset.expanded = 'true';
+            }
 
-            viewMoreBtn.addEventListener('click', function() {
-                collapseInstance.show();
-                viewMoreBtn.classList.add('d-none');
-                viewLessBtn.classList.remove('d-none');
-                innerContainer.style.maxHeight = 'none'; // Show all
-                innerContainer.style.overflow = 'visible';
+            // Initial state
+            applyCollapsedTwoRows();
+
+            moreBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                applyExpanded();
+            });
+            lessBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                applyCollapsedTwoRows();
             });
 
-            viewLessBtn.addEventListener('click', function() {
-                collapseInstance.hide();
-                viewMoreBtn.classList.remove('d-none');
-                viewLessBtn.classList.add('d-none');
-                innerContainer.style.maxHeight = `${maxVisibleHeight}px`; // Collapse
-                innerContainer.style.overflow = 'hidden';
-            });
+            container.dataset.tagsInitialized = 'true';
+            // Store recompute handler for reuse
+            container._recomputeCollapsed = applyCollapsedTwoRows;
         });
     }
 
-    // Run on load and resize
-    adjustTagsDisplay();
-    window.addEventListener('resize', adjustTagsDisplay);
+    // Initialize once on load
+    setupGridTags();
+    // Recompute when switching views or on resize (only collapsed containers)
+    function recomputeCollapsedTagsIfNeeded() {
+        document.querySelectorAll('.tags-container').forEach((container) => {
+            if (container.dataset.tagsInitialized === 'true' && container.dataset.expanded !== 'true' && typeof container._recomputeCollapsed === 'function') {
+                container._recomputeCollapsed();
+            }
+        });
+    }
+    // When grid view becomes visible, recompute
+    const originalUpdateView = updateView;
+    updateView = function() {
+        originalUpdateView();
+        if (isGridView) recomputeCollapsedTagsIfNeeded();
+    }
+    window.addEventListener('resize', () => {
+        if (isGridView) recomputeCollapsedTagsIfNeeded();
+    });
 });
 </script>
 <script>

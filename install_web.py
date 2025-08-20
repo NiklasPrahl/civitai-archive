@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Installation script for Civitai Manager web dependencies
+Installation script for Civitai Archive web dependencies
 """
 
 import subprocess
@@ -19,7 +19,7 @@ def install_package(package):
 
 def main():
     print("=" * 60)
-    print("Civitai Manager Web Dependencies Installation")
+    print("Civitai Archive Web Dependencies Installation")
     print("=" * 60)
     
     # List of required packages

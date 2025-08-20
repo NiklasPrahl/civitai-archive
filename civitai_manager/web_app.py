@@ -180,21 +180,37 @@ def get_models_info():
             for model in models:
                 item = model['base_name'] # This is the sanitized name
                 # Ensure base_name is also HTML escaped for URL generation
-                model['base_name'] = html.escape(item) # Add this line
+                model['base_name'] = html.escape(item)
                 item_path = os.path.join(output_dir, item)
                 local_images = [f for f in os.listdir(item_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
                 if local_images:
-                    # Construct the relative path for local_static_files endpoint
                     model['preview_image_url'] = url_for('local_static_files', filename=f'{item}/{sorted(local_images)[0]}')
                     model['has_images'] = True
                 else:
                     model['preview_image_url'] = url_for('static', filename='placeholder.png')
                     model['has_images'] = False
-                
+
                 # Explicitly escape HTML for title and author
                 model['title'] = html.escape(model.get('name', ''))
                 model['author'] = html.escape(model.get('author', 'Unknown'))
                 model['tags'] = [html.escape(tag) for tag in model.get('tags', [])]
+
+                # Versionen aus _model_version.json lesen
+                model['versions'] = []
+                version_file = os.path.join(item_path, f"{item}_civitai_model_version.json")
+                if os.path.exists(version_file):
+                    try:
+                        with open(version_file, 'r', encoding='utf-8') as vf:
+                            version_data = json.load(vf)
+                            # Falls version_data eine Liste ist, alle Namen extrahieren, sonst nur einen
+                            if isinstance(version_data, list):
+                                for v in version_data:
+                                    if 'name' in v:
+                                        model['versions'].append({'name': v['name']})
+                            elif isinstance(version_data, dict) and 'name' in version_data:
+                                model['versions'].append({'name': version_data['name']})
+                    except Exception as e:
+                        print(f"ERROR: Could not load version info for {item}: {e}")
 
             print(f"DEBUG: Finished post-processing models from summary file. Total time: {time.time() - start_time:.4f} seconds")
             

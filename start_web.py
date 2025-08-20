@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Start script for Civitai Manager web server
+Start script for Civitai Archive web server
 """
 
 import sys
@@ -14,7 +14,7 @@ try:
     
     if __name__ == "__main__":
         print("=" * 60)
-        print("Civitai Manager Web Interface")
+        print("Civitai Archive Web Interface")
         print("=" * 60)
         print("Starting web application...")
         print("Open http://localhost:8080 in your browser")
