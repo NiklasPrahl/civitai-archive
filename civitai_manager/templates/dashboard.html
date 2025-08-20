@@ -3,7 +3,62 @@
 {% block title %}Dashboard - Civitai Manager{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+<style>
+/* Layout tweaks for Model Statistics */
+.kpi-card { min-height: 0; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+.kpi-card .card-body { padding: 2rem 1rem; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; }
+.kpi-card .h4 { font-size: 1.8rem; font-weight: 600; }
+.kpi-card .fas { font-size: 1.5rem; }
+/* Compact tile styling - horizontally centered icon+text */
+.compact-tile { min-height: 70px; }
+.compact-tile .card-body { padding: 0.75rem; display: flex; align-items: center; justify-content: center; }
+.compact-tile .tile-content { display: flex; align-items: center; }
+.compact-tile .icon-section { flex-shrink: 0; margin-right: 0.75rem; }
+.compact-tile .icon-section .fas { font-size: 1.8rem; }
+.compact-tile .content-section { flex-shrink: 0; }
+.compact-tile .h6 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; }
+.compact-tile small { font-size: 0.75rem; line-height: 1.2; }
+/* Apple-style legend */
+.type-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.type-legend-item { display: flex; align-items: center; font-size: 0.7rem; }
+.type-legend-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 0.3rem; flex-shrink: 0; }
+/* Custom tooltip styling */
+.compact-ring-segment { position: relative; }
+.compact-ring-segment::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 120%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.9);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1000;
+}
+.compact-ring-segment:hover::before {
+    opacity: 1;
+}
+/* Smooth collapse transitions */
+#modelStatsCollapse { transition: all 0.35s ease-in-out; overflow: hidden; }
+#compactSummary { transition: opacity 0.25s ease-in-out; }
+/* Collapse visibility controls - compact as default */
+#compactSummary { display: block; }
+.hidden-by-fade { display: none !important; }
+/* Fade detailed content on expand/collapse */
+.collapse .collapse-fade { opacity: 0; transition: opacity 0.25s ease-in-out; }
+.collapse.show .collapse-fade { opacity: 1; }
+/* Make the doughnut bigger while keeping legend below */
+#modelTypeChart { height: 280px !important; max-height: 280px !important; }
+/* 2x2 KPI grid that fills left column height */
+.kpi-grid { display:grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: .75rem; height: 100%; }
+</style>
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-1 mb-2 border-bottom">
     <h1 class="h2">
         <i class="fas fa-tachometer-alt me-2"></i>
         Dashboard
@@ -32,23 +87,187 @@
 
 <!-- Model Statistics Card -->
 <div class="card mb-4 shadow-sm">
-    <div class="card-header">
+    <div class="card-header d-flex align-items-center justify-content-between py-2">
         <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Model Statistics</h5>
+        <div class="ms-auto">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#modelStatsCollapse" aria-expanded="false" aria-controls="modelStatsCollapse">
+                <i class="fas fa-chevron-right" id="statsCollapseIcon"></i>
+            </button>
+        </div>
     </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <h6><i class="fas fa-brain me-2"></i>Total Models: <span class="badge bg-primary">{{ total_models }}</span></h6>
-                <h6 class="mt-3"><i class="fas fa-database me-2"></i>Total Size: <span class="badge bg-info">{{ "%.2f"|format(total_size_gb) }} GB</span></h6>
+    
+    {% set ns = namespace(meta=0, imgs=0) %}
+    {% for m in models %}
+        {% if m.has_metadata %}{% set ns.meta = ns.meta + 1 %}{% endif %}
+        {% if m.has_images %}{% set ns.imgs = ns.imgs + 1 %}{% endif %}
+    {% endfor %}
+    {% set meta_pct = (ns.meta * 100 / (total_models if total_models else 1)) | round(0) %}
+    {% set imgs_pct = (ns.imgs * 100 / (total_models if total_models else 1)) | round(0) %}
+    
+    <!-- Compact summary (default view - visible when collapsed) -->
+    <div class="card-body py-3 bg-white border-bottom" id="compactSummary">
+        <div class="row g-2">
+            <div class="col-6 col-md-2">
+                <div class="card border-0 bg-light h-100 shadow-sm compact-tile">
+                    <div class="card-body">
+                        <div class="tile-content">
+                            <div class="icon-section">
+                                <div class="text-primary"><i class="fas fa-brain"></i></div>
+                            </div>
+                            <div class="content-section">
+                                <div class="h6 mb-0">{{ total_models }}</div>
+                                <small class="text-muted">Models</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-6">
-                <h6><i class="fas fa-tags me-2"></i>Models by Type:</h6>
-                <ul class="list-unstyled mt-2">
-                    {% for type, count in model_type_counts.items() %}
-                        <li class="mb-1"><span class="badge bg-secondary">{{ type }}</span>: {{ count }}</li>
-                    {% endfor %}
-                </ul>
+            <div class="col-6 col-md-2">
+                <div class="card border-0 bg-light h-100 shadow-sm compact-tile">
+                    <div class="card-body">
+                        <div class="tile-content">
+                            <div class="icon-section">
+                                <div class="text-info"><i class="fas fa-database"></i></div>
+                            </div>
+                            <div class="content-section">
+                                <div class="h6 mb-0">{{ "%.1f"|format(total_size_gb) }}GB</div>
+                                <small class="text-muted">Size</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+            <div class="col-6 col-md-2">
+                <div class="card border-0 bg-light h-100 shadow-sm compact-tile">
+                    <div class="card-body">
+                        <div class="tile-content">
+                            <div class="icon-section">
+                                <div class="text-success"><i class="fas fa-file-alt"></i></div>
+                            </div>
+                            <div class="content-section">
+                                <div class="h6 mb-0">{{ ns.meta }}/{{ total_models }}</div>
+                                <small class="text-muted">Metadata</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card border-0 bg-light h-100 shadow-sm compact-tile">
+                    <div class="card-body">
+                        <div class="tile-content">
+                            <div class="icon-section">
+                                <div class="text-success"><i class="fas fa-images"></i></div>
+                            </div>
+                            <div class="content-section">
+                                <div class="h6 mb-0">{{ ns.imgs }}/{{ total_models }}</div>
+                                <small class="text-muted">Images</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card border-0 bg-light h-100 shadow-sm compact-tile">
+                    <div class="card-body">
+                        <div class="tile-content w-100">
+                            <div class="icon-section">
+                                <div class="text-secondary"><i class="fas fa-chart-pie"></i></div>
+                            </div>
+                            <div class="content-section flex-grow-1">
+                                {% if model_type_counts %}
+                                    {% set total_count = model_type_counts.values() | sum %}
+                                    {% set sorted_types = model_type_counts.items() | list | sort(attribute='1', reverse=true) %}
+                             <div class="compact-ring-bar d-flex rounded overflow-hidden mb-2" style="height: 14px;">
+                                        {% for type, count in sorted_types %}
+                                            {% set width_pct = ((count / total_count * 100) if total_count > 0 else 0) | round(1) %}
+                                            {% set colors = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1','#ff9da7','#9c755f','#bab0ab'] %}
+                                    <div class="compact-ring-segment"
+                                        data-width-pct="{{ width_pct }}"
+                                        data-bg="{{ colors[loop.index0 % 10] }}"
+                                        data-tooltip="{{ type }}: {{ count }} model{{ 's' if count != 1 }} ({{ width_pct }}%)"></div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="type-legend">
+                                        {% for type, count in sorted_types[:4] %}
+                                            {% set colors = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1','#ff9da7','#9c755f','#bab0ab'] %}
+                                    <div class="type-legend-item">
+                                       <div class="type-legend-dot" data-bg="{{ colors[loop.index0 % 10] }}"></div>
+                                                <span class="text-muted">{{ type }}</span>
+                                            </div>
+                                        {% endfor %}
+                                        {% if sorted_types|length > 4 %}
+                                            <div class="type-legend-item">
+                                                <span class="text-muted">+{{ sorted_types|length - 4 }} more</span>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <small class="text-muted">No type data available</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Detailed view (collapsible, hidden by default) -->
+    <div class="collapse" id="modelStatsCollapse">
+        <div class="card-body pt-1 collapse-fade">
+
+        <!-- KPI group (left) and Distribution ring (right) -->
+        <div class="row g-3 align-items-stretch">
+            <div class="col-md-8">
+                <div class="kpi-grid">
+                    <div class="card border-0 bg-light shadow-sm kpi-card">
+                        <div class="card-body text-center">
+                            <div class="text-primary mb-2"><i class="fas fa-brain fa-lg"></i></div>
+                            <div class="h4 mb-0">{{ total_models }}</div>
+                            <div class="text-muted small">Total Models</div>
+                        </div>
+                    </div>
+                    <div class="card border-0 bg-light shadow-sm kpi-card">
+                        <div class="card-body text-center">
+                            <div class="text-info mb-2"><i class="fas fa-database fa-lg"></i></div>
+                            <div class="h4 mb-0">{{ "%.2f"|format(total_size_gb) }} GB</div>
+                            <div class="text-muted small">Total Size</div>
+                        </div>
+                    </div>
+                    <div class="card border-0 bg-light shadow-sm kpi-card">
+                        <div class="card-body text-center">
+                            <div class="text-success mb-2"><i class="fas fa-file-alt fa-lg"></i></div>
+                            <div class="h4 mb-0">{{ ns.meta }}</div>
+                            <div class="text-muted small">With Metadata</div>
+                            <div class="progress mt-2" style="height: 6px;">
+                                <div class="progress-bar bg-success" role="progressbar" data-percent="{{ meta_pct }}"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card border-0 bg-light shadow-sm kpi-card">
+                        <div class="card-body text-center">
+                            <div class="text-success mb-2"><i class="fas fa-images fa-lg"></i></div>
+                            <div class="h4 mb-0">{{ ns.imgs }}</div>
+                            <div class="text-muted small">With Images</div>
+                            <div class="progress mt-2" style="height: 6px;">
+                                <div class="progress-bar bg-success" role="progressbar" data-percent="{{ imgs_pct }}"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 border-0 bg-light shadow-sm">
+                    <div class="card-body pt-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Distribution</h6>
+                        </div>
+                        <canvas id="modelTypeChart" height="280" style="height:280px; max-height:280px;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
         </div>
     </div>
 </div>
@@ -232,6 +451,15 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Embedded data for charts/KPIs (avoid Jinja inside JS) -->
+<div id="dashData" class="d-none"
+    data-type-labels='{{ model_type_counts.keys() | list | tojson }}'
+    data-type-data='{{ model_type_counts.values() | list | tojson }}'
+    data-total="{{ total_models or 0 }}"
+    data-with-meta="{{ models | selectattr('has_metadata') | list | length }}"
+    data-with-imgs="{{ models | selectattr('has_images') | list | length }}">
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 function handleImageError(imgElement) {
     imgElement.onerror = null; // Prevent infinite loop if placeholder also fails
@@ -291,6 +519,52 @@ function processAllModels() {
 
 // View toggle functionality
 document.addEventListener('DOMContentLoaded', function() {
+    // Model Statistics collapse handling
+    const modelStatsCollapse = document.getElementById('modelStatsCollapse');
+    const collapseIcon = document.getElementById('statsCollapseIcon');
+    const compactSummary = document.getElementById('compactSummary');
+    
+    if (modelStatsCollapse && collapseIcon && compactSummary) {
+        const statsCard = modelStatsCollapse.closest('.card');
+        let compactHeight = compactSummary.offsetHeight || compactSummary.scrollHeight || 0;
+        modelStatsCollapse.addEventListener('show.bs.collapse', function () {
+            collapseIcon.classList.remove('fa-chevron-right');
+            collapseIcon.classList.add('fa-chevron-down');
+            // Hide compact immediately to prevent layout snapping, but keep smoothness
+            compactSummary.classList.add('hidden-by-fade');
+            compactSummary.style.opacity = '0';
+            // Ensure card isn't constrained
+            if (statsCard) statsCard.style.minHeight = '';
+        });
+        modelStatsCollapse.addEventListener('shown.bs.collapse', function () {
+            // no-op
+        });
+
+        modelStatsCollapse.addEventListener('hide.bs.collapse', function () {
+            collapseIcon.classList.remove('fa-chevron-down');
+            collapseIcon.classList.add('fa-chevron-right');
+            // Lock card height to compact height to prevent over-collapsing/overlap
+            if (!compactHeight) {
+                compactHeight = compactSummary.scrollHeight || 60;
+            }
+            if (statsCard) statsCard.style.minHeight = compactHeight + 'px';
+        });
+        modelStatsCollapse.addEventListener('hidden.bs.collapse', function () {
+            // Now reveal compact and fade it in, after the collapse animation is finished
+            if (statsCard) statsCard.style.minHeight = '';
+            compactSummary.classList.remove('hidden-by-fade');
+            compactSummary.style.display = 'block';
+            compactSummary.style.opacity = '0';
+            requestAnimationFrame(() => {
+                compactSummary.style.opacity = '1';
+                // Recalculate and cache height for the next toggle
+                requestAnimationFrame(() => {
+                    compactHeight = compactSummary.offsetHeight || compactHeight;
+                });
+            });
+        });
+    }
+
     const viewToggleBtn = document.getElementById('viewToggleBtn');
     const viewToggleIcon = document.getElementById('viewToggleIcon');
     const listView = document.getElementById('listView');
@@ -392,6 +666,84 @@ document.addEventListener('DOMContentLoaded', function() {
     // Run on load and resize
     adjustTagsDisplay();
     window.addEventListener('resize', adjustTagsDisplay);
+});
+</script>
+<script>
+// Charts initialization
+document.addEventListener('DOMContentLoaded', function() {
+    const dataEl = document.getElementById('dashData');
+    const typeLabels = dataEl ? JSON.parse(dataEl.getAttribute('data-type-labels') || '[]') : [];
+    const typeData = dataEl ? JSON.parse(dataEl.getAttribute('data-type-data') || '[]') : [];
+    let typeChart = null;
+
+    function initTypeChart() {
+        const ctx = document.getElementById('modelTypeChart');
+        if (!ctx) return;
+        // Destroy any existing to reset animation
+        if (typeChart) {
+            try { typeChart.destroy(); } catch (e) {}
+            typeChart = null;
+        }
+        const bgColors = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1','#ff9da7','#9c755f','#bab0ab'];
+        typeChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: typeLabels,
+                datasets: [{
+                    data: typeData,
+                    backgroundColor: typeLabels.map((_, i) => bgColors[i % bgColors.length]),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 12, boxHeight: 12, font: { size: 11 } },
+                        display: true
+                    },
+                    tooltip: { bodyFont: { size: 11 }, titleFont: { size: 12 } }
+                },
+                layout: { padding: { top: 0, right: 0, bottom: 0, left: 0 } },
+                cutout: '66%',
+                maintainAspectRatio: false,
+                radius: '96%'
+            }
+        });
+    }
+
+    // Set progress widths from data-percent attributes
+    document.querySelectorAll('.progress-bar[data-percent]').forEach(el => {
+        const pct = Math.max(0, Math.min(100, parseInt(el.getAttribute('data-percent') || '0', 10)));
+        el.style.width = pct + '%';
+        el.setAttribute('aria-valuenow', pct);
+    });
+
+    // Apply dynamic styles for compact ring segments and legend dots (from data-*), avoids Jinja in style attrs
+    document.querySelectorAll('.compact-ring-segment').forEach(el => {
+        const w = el.getAttribute('data-width-pct');
+        const bg = el.getAttribute('data-bg');
+        if (w) el.style.width = w + '%';
+        if (bg) el.style.backgroundColor = bg;
+    });
+    document.querySelectorAll('.type-legend-dot[data-bg]').forEach(el => {
+        const bg = el.getAttribute('data-bg');
+        if (bg) el.style.backgroundColor = bg;
+    });
+
+    // Lazy init the chart when the detailed view finishes expanding, destroy on collapse finish
+    const modelStatsCollapse = document.getElementById('modelStatsCollapse');
+    if (modelStatsCollapse) {
+        modelStatsCollapse.addEventListener('shown.bs.collapse', function () {
+            initTypeChart();
+        });
+        modelStatsCollapse.addEventListener('hidden.bs.collapse', function () {
+            if (typeChart) {
+                try { typeChart.destroy(); } catch (e) {}
+                typeChart = null;
+            }
+        });
+    }
 });
 </script>
 <script>
