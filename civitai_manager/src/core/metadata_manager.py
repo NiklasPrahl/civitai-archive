@@ -33,12 +33,17 @@ except ImportError:
     sys.exit(1)
 
 def find_safetensors_files(directory_path):
-    safetensors_files = []
+    """Find model files (safetensors, ckpt, pt, pth, bin) recursively.
+
+    Kept function name for backward compatibility.
+    """
+    model_files = []
+    exts = ('.safetensors', '.ckpt', '.pt', '.pth', '.bin')
     for root, dirs, files in os.walk(directory_path, followlinks=True):
         for file in files:
-            if file.endswith('.safetensors'):
-                safetensors_files.append(Path(root) / file)
-    return safetensors_files
+            if file.lower().endswith(exts):
+                model_files.append(Path(root) / file)
+    return model_files
 
 def get_output_path(clean=False):
     """
@@ -329,7 +334,7 @@ def process_directory(
                     logging.info("No new non-missing files to process")
                     return (0, 0, 0)
 
-            logging.info(f"Found {len(safetensors_files)} new .safetensors files")
+            logging.info(f"Found {len(safetensors_files)} new model files")
             
         elif only_update:
             # Only get previously processed files
@@ -343,9 +348,9 @@ def process_directory(
         else:
             safetensors_files = find_safetensors_files(directory_path)
             if not safetensors_files:
-                logging.warning(f"No .safetensors files found in {directory_path}")
+                logging.warning(f"No model files found in {directory_path}")
                 return (0, 0, 0)
-            logging.info(f"Found {len(safetensors_files)} .safetensors files")
+            logging.info(f"Found {len(safetensors_files)} model files")
         
         if html_only:
             logging.info("HTML only mode: Skipping data fetching")

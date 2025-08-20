@@ -2,6 +2,18 @@ import json
 from pathlib import Path
 from typing import Dict, Optional, Union
 
+# Define supported file extensions for Civitai models.
+# This list can be expanded to include other file types that contain relevant metadata.
+SUPPORTED_FILE_EXTENSIONS = [
+    ".safetensors",
+    ".ckpt",
+    ".pt",
+    ".bin",
+    ".pth",
+    ".json", # For ComfyUI workflows, though metadata extraction might differ
+    ".yaml"  # For ComfyUI workflows, though metadata extraction might differ
+]
+
 class ConfigValidationError(Exception):
     pass
 

@@ -14,6 +14,7 @@ import requests
 
 from ..utils.string_utils import sanitize_filename, calculate_sha256
 from ..utils.html_generators.model_page import generate_html_summary
+from ..utils.config import SUPPORTED_FILE_EXTENSIONS
 
 # Configure logging
 logging.basicConfig(
@@ -39,10 +40,11 @@ def setup_export_directories(base_path, safetensors_path):
 
 def extract_metadata(file_path, output_dir):
     """
-    Extract metadata from a .safetensors file
+    Extract metadata from a file.
+    Currently optimized for .safetensors files.
     
     Args:
-        file_path (str): Path to the .safetensors file
+        file_path (str): Path to the file
         output_dir (Path): Directory to save the output
     Returns:
         bool: True if successful, False otherwise
@@ -53,37 +55,52 @@ def extract_metadata(file_path, output_dir):
         if not path.exists():
             raise FileNotFoundError(f"File {path} not found")
         
-        if path.suffix != '.safetensors':
-            raise ValueError("File must have .safetensors extension")
-        
         base_name = sanitize_filename(path.stem)
         metadata_path = output_dir / f"{base_name}_metadata.json"
-        
-        # Read just the first line for metadata
-        with open(path, 'rb') as f:
-            # Read header length (8 bytes, little-endian)
-            header_length = int.from_bytes(f.read(8), 'little')
-            
-            # Read the header
-            header_bytes = f.read(header_length)
-            header_str = header_bytes.decode('utf-8')
-            
+
+        ext = path.suffix.lower()
+        if ext == '.safetensors':
+            # Logic for .safetensors files
+            with open(path, 'rb') as f:
+                header_length = int.from_bytes(f.read(8), 'little')
+                header_bytes = f.read(header_length)
+                header_str = header_bytes.decode('utf-8')
+                
+                try:
+                    header_data = json.loads(header_str)
+                    with open(metadata_path, 'w', encoding='utf-8') as f:
+                        if "__metadata__" in header_data:
+                            json.dump(header_data["__metadata__"], f, indent=4)
+                        else:
+                            json.dump(header_data, f, indent=4)
+                    print(f"Metadata successfully extracted to {metadata_path}")
+                    return True
+                
+                except json.JSONDecodeError:
+                    print("Error: Could not parse metadata JSON from .safetensors file")
+                    return False
+        elif ext in {'.ckpt', '.pt', '.pth', '.bin'}:
+            # Minimal metadata for non-safetensors formats
             try:
-                # Parse the JSON header
-                header_data = json.loads(header_str)
-                
-                # Write metadata to JSON file
+                stat = path.stat()
+                meta = {
+                    "file_name": path.name,
+                    "file_extension": ext,
+                    "file_size_bytes": stat.st_size,
+                    "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "note": "No embedded metadata extracted for this format; using basic file info."
+                }
                 with open(metadata_path, 'w', encoding='utf-8') as f:
-                    if "__metadata__" in header_data:
-                        json.dump(header_data["__metadata__"], f, indent=4)
-                    else:
-                        json.dump(header_data, f, indent=4)
-                print(f"Metadata successfully extracted to {metadata_path}")
+                    json.dump(meta, f, indent=4)
+                print(f"Basic metadata saved to {metadata_path}")
                 return True
-                
-            except json.JSONDecodeError:
-                print("Error: Could not parse metadata JSON")
+            except Exception as e:
+                print(f"Error writing basic metadata: {e}")
                 return False
+        else:
+            # Unsupported for metadata
+            print(f"Warning: Metadata extraction for {path.suffix} files is not supported.")
+            return False
                 
     except Exception as e:
         print(f"Error: {str(e)}")
@@ -405,7 +422,7 @@ def check_for_updates(safetensors_path, output_dir, hash_value):
         return True
 
 def process_single_file(
-    safetensors_path: Path,
+    file_path: Path, # Renamed from safetensors_path to file_path
     base_output_path: Path,
     download_all_images: bool = False,
     skip_images: bool = False,
@@ -414,10 +431,10 @@ def process_single_file(
     session: Optional[requests.Session] = None
 ) -> bool:
     """
-    Process a single safetensors file
+    Process a single file
     
     Args:
-        safetensors_path: Path to the safetensors file
+        file_path: Path to the file
         base_output_path: Base path for output
         download_all_images: Whether to download all available preview images
         skip_images: Whether to skip downloading images completely
@@ -428,21 +445,22 @@ def process_single_file(
     Returns:
         bool: True if processing was successful, False otherwise
     """
-    if not safetensors_path.exists():
+    if not file_path.exists():
         return False
         
-    if safetensors_path.suffix != '.safetensors':
+    if file_path.suffix not in SUPPORTED_FILE_EXTENSIONS:
+        print(f"Skipping unsupported file type: {file_path.name}")
         return False
     
-    model_output_dir = setup_export_directories(base_output_path, safetensors_path)
+    model_output_dir = setup_export_directories(base_output_path, file_path)
     
-    print(f"\nProcessing: {safetensors_path.name}")
+    print(f"\nProcessing: {file_path.name}")
     if not html_only:
         print(f"Files will be saved in: {model_output_dir}")
     
     if html_only:
         # Check if required files exist
-        base_name = sanitize_filename(safetensors_path.stem)
+        base_name = sanitize_filename(file_path.stem)
         required_files = [
             model_output_dir / f"{base_name}_civitai_model.json",
             model_output_dir / f"{base_name}_civitai_model_version.json",
@@ -452,11 +470,11 @@ def process_single_file(
         if not all(f.exists() for f in required_files):
             return False
             
-        generate_html_summary(model_output_dir, safetensors_path)
+        generate_html_summary(model_output_dir, file_path)
         return True
     
     if only_update:
-        hash_file = model_output_dir / f"{safetensors_path.stem}_hash.json"
+        hash_file = model_output_dir / f"{file_path.stem}_hash.json"
         if not hash_file.exists():
             return False
             
@@ -470,25 +488,25 @@ def process_single_file(
         except Exception:
             return False
     else:
-        hash_value = extract_hash(safetensors_path, model_output_dir)
+        hash_value = extract_hash(file_path, model_output_dir)
         if not hash_value:
             return False
     
-    if not check_for_updates(safetensors_path, model_output_dir, hash_value):
+    if not check_for_updates(file_path, model_output_dir, hash_value):
         return True
     
     metadata_extracted = False
     if only_update:
         metadata_extracted = True # Assume metadata is already there for update mode
     else:
-        metadata_extracted = extract_metadata(safetensors_path, model_output_dir)
+        metadata_extracted = extract_metadata(file_path, model_output_dir)
 
     if metadata_extracted:
         model_id = fetch_version_data(hash_value, model_output_dir, base_output_path, 
-                                    safetensors_path, download_all_images, skip_images)
+                                    file_path, download_all_images, skip_images)
         if model_id:
-            fetch_model_details(model_id, model_output_dir, safetensors_path)
-            generate_html_summary(model_output_dir, safetensors_path)
+            fetch_model_details(model_id, model_output_dir, file_path)
+            generate_html_summary(model_output_dir, file_path)
             return True
         else:
             return False
