@@ -8,7 +8,7 @@ import time
 import random
 import logging
 import hashlib
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, DefaultDict
 
 import requests
 
@@ -22,153 +22,316 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-def setup_export_directories(base_path, safetensors_path):
+def setup_export_directories(base_path: Path, file_path: Path) -> Path:
     """
-    Set up the export directories for a model
-    
-    Args:
-        base_path (Path): Base output directory
-        safetensors_path (Path): Path to the safetensors file
-        
-    Returns:
-        Path: Model-specific output directory
+    Create and return the model-specific output directory.
+
+    Structure:
+      <base_path>/<base_name>/
+        - previews/
+        - user_images/ (legacy)
+        - user_posts/
     """
-    sanitized_name = sanitize_filename(safetensors_path.stem)
-    model_dir = base_path / sanitized_name
-    model_dir.mkdir(parents=True, exist_ok=True)
+    base_name = sanitize_filename(file_path.stem)
+    model_dir = Path(base_path) / base_name
+    (model_dir / 'previews').mkdir(parents=True, exist_ok=True)
+    (model_dir / 'user_posts').mkdir(parents=True, exist_ok=True)
     return model_dir
 
-def extract_metadata(file_path, output_dir):
-    """
-    Extract metadata from a file.
-    Currently optimized for .safetensors files.
-    
-    Args:
-        file_path (str): Path to the file
-        output_dir (Path): Directory to save the output
-    Returns:
-        bool: True if successful, False otherwise
-    """
+def extract_metadata(file_path: Path, output_dir: Path) -> bool:
+    """Extract minimal metadata for a model file into <stem>_metadata.json."""
     try:
-        path = Path(file_path)
-        
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} not found")
-        
-        base_name = sanitize_filename(path.stem)
-        metadata_path = output_dir / f"{base_name}_metadata.json"
-
-        ext = path.suffix.lower()
-        if ext == '.safetensors':
-            # Logic for .safetensors files
-            with open(path, 'rb') as f:
-                header_length = int.from_bytes(f.read(8), 'little')
-                header_bytes = f.read(header_length)
-                header_str = header_bytes.decode('utf-8')
-                
-                try:
-                    header_data = json.loads(header_str)
-                    with open(metadata_path, 'w', encoding='utf-8') as f:
-                        if "__metadata__" in header_data:
-                            json.dump(header_data["__metadata__"], f, indent=4)
-                        else:
-                            json.dump(header_data, f, indent=4)
-                    print(f"Metadata successfully extracted to {metadata_path}")
-                    return True
-                
-                except json.JSONDecodeError:
-                    print("Error: Could not parse metadata JSON from .safetensors file")
-                    return False
-        elif ext in {'.ckpt', '.pt', '.pth', '.bin'}:
-            # Minimal metadata for non-safetensors formats
-            try:
-                stat = path.stat()
-                meta = {
-                    "file_name": path.name,
-                    "file_extension": ext,
-                    "file_size_bytes": stat.st_size,
-                    "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    "note": "No embedded metadata extracted for this format; using basic file info."
-                }
-                with open(metadata_path, 'w', encoding='utf-8') as f:
-                    json.dump(meta, f, indent=4)
-                print(f"Basic metadata saved to {metadata_path}")
-                return True
-            except Exception as e:
-                print(f"Error writing basic metadata: {e}")
-                return False
-        else:
-            # Unsupported for metadata
-            print(f"Warning: Metadata extraction for {path.suffix} files is not supported.")
+        if not file_path.exists():
             return False
-                
+        if file_path.suffix not in SUPPORTED_FILE_EXTENSIONS:
+            return False
+        meta = {
+            'filename': file_path.name,
+            'size_bytes': file_path.stat().st_size,
+            'modified_at': datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
+        }
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        with open(output_dir / f"{file_path.stem}_metadata.json", 'w', encoding='utf-8') as f:
+            json.dump(meta, f, indent=4)
+        return True
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error extracting metadata: {e}")
         return False
 
-def extract_hash(file_path, output_dir):
-    """
-    Calculate hash of a .safetensors file and save it as JSON
-    
-    Args:
-        file_path (str): Path to the .safetensors file
-        output_dir (Path): Directory to save the output
-    Returns:
-        str: Hash value if successful, None otherwise
-    """
+def extract_hash(file_path: Path, output_dir: Path) -> Optional[str]:
+    """Compute SHA-256 for the file and write <stem>_hash.json."""
     try:
-        path = Path(file_path)
+        if not file_path.exists():
+            return None
+        h = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                if not chunk:
+                    break
+                h.update(chunk)
+        value = h.hexdigest()
         output_dir = Path(output_dir)
-        
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} not found")
-        
-        hash_value = calculate_sha256(path)
-        if not hash_value:
-            raise ValueError("Failed to calculate hash")
-            
-        base_name = sanitize_filename(path.stem)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
-        hash_path = output_dir / f"{base_name}_hash.json"
-        hash_data = {
-            "hash_type": "SHA256",
-            "hash_value": hash_value,
-            "filename": path.name,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        with open(hash_path, 'w', encoding='utf-8') as f:
-            json.dump(hash_data, f, indent=4)
-        print(f"Hash successfully saved to {hash_path}")
-        
-        return hash_value
-        
+        with open(output_dir / f"{file_path.stem}_hash.json", 'w', encoding='utf-8') as f:
+            json.dump({'hash_value': value, 'algorithm': 'SHA256'}, f, indent=4)
+        return value
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error extracting hash: {e}")
         return None
 
-def download_preview_image(image_url, output_dir, base_name, index=None, is_video=False, image_data=None, subdir: Optional[str] = None):
+def fetch_user_posts(
+    model_id: int,
+    output_dir: Path,
+    base_name: str,
+    posts_limit: int = 0,
+    images_per_post_limit: int = 0,
+    session: Optional[requests.Session] = None,
+    model_version_id: Optional[int] = None,
+    user_images_level: str = 'ALL',
+) -> Dict[int, int]:
     """
-    Download a preview image from Civitai
-    
+    Fetch user posts (grouped by postId) for a model or version via Images API.
+
+    Creates a 'user_posts' directory with subfolders per post: user_posts/post_<postId>/
+    Each subfolder contains the images and their JSON metadata, plus a post.json summary.
+
     Args:
-        image_url (str): URL of the image to download
-        output_dir (Path): Directory to save the image
+        model_id: Model ID
+        output_dir: Model output directory
+        base_name: Base filename base
+        posts_limit: Max number of posts to save (0 = unlimited)
+        images_per_post_limit: Max images per post (0 = unlimited)
+        session: Optional requests session
+        model_version_id: Optional version ID to filter
+        user_images_level: NSFW level filter for images endpoint (PG, PG-13, R, X, XXX, ALL)
+
+    Returns:
+        Dict[postId, int]: Mapping of postId to number of images saved
+    """
+    saved_counts: Dict[int, int] = {}
+    try:
+        session = session or requests.Session()
+        posts_root = Path(output_dir) / 'user_posts'
+        posts_root.mkdir(parents=True, exist_ok=True)
+
+        # Set browser-like headers similar to fetch_user_images
+        session.headers.update({
+            'Accept': 'application/json, text/plain, */*',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+            'Referer': 'https://civitai.com/'
+        })
+        api_token = os.environ.get('CIVITAI_API_TOKEN')
+        if api_token:
+            session.headers['Authorization'] = f'Bearer {api_token}'
+
+        # Pagination through images endpoint; group by postId
+        next_page_url = None
+        total_posts_collected = 0
+        # NSFW params mapping
+        level = (user_images_level or 'ALL').upper()
+
+        # Track groups in memory until we persist respecting limits
+        from collections import defaultdict
+        groups: DefaultDict[int, List[Dict]] = defaultdict(list)
+
+        # Local cache for model version info to avoid repeated requests
+        version_info_cache: Dict[int, Dict[str, str]] = {}
+
+        def get_model_version_info_local(vid: int) -> Optional[Dict[str, str]]:
+            try:
+                if not vid:
+                    return None
+                if vid in version_info_cache:
+                    return version_info_cache[vid]
+                url = f"https://civitai.com/api/v1/model-versions/{int(vid)}"
+                resp = session.get(url, timeout=20)
+                if resp.status_code != 200:
+                    version_info_cache[vid] = {}
+                    return None
+                data_mv = resp.json() if resp.content else {}
+                model_name = (data_mv.get('model') or {}).get('name') if isinstance(data_mv, dict) else None
+                version_name = data_mv.get('name') if isinstance(data_mv, dict) else None
+                label = f"{model_name} - {version_name}" if model_name and version_name else (version_name or model_name or str(vid))
+                result_mv = {
+                    'modelName': model_name or '',
+                    'versionName': version_name or '',
+                    'label': label,
+                }
+                version_info_cache[vid] = result_mv
+                return result_mv
+            except Exception:
+                return None
+
+        while True:
+            if next_page_url:
+                url = next_page_url
+                params = None
+            else:
+                params = {
+                    'limit': 100,
+                }
+                if level == 'ALL':
+                    params['nsfw'] = 'true'
+                elif level == 'PG':
+                    params['nsfw'] = 'false'
+                else:
+                    params['nsfw'] = 'true'
+                    params['nsfwLevel'] = level
+                if model_version_id:
+                    params['modelVersionId'] = model_version_id
+                else:
+                    params['modelId'] = model_id
+                url = 'https://civitai.com/api/v1/images'
+
+            r = session.get(url, params=params, timeout=30)
+            if r.status_code != 200:
+                print(f"Failed to fetch user posts/images (status {r.status_code})")
+                break
+            data = r.json() if r.content else {}
+            items = data.get('items') if isinstance(data, dict) else []
+            metadata = data.get('metadata') if isinstance(data, dict) else {}
+
+            # Fallback to modelId if version returns empty
+            if not items and model_version_id and params is None:
+                # Already following nextPage cursor; if still empty, stop
+                break
+            if not items and model_version_id and params is not None and 'modelVersionId' in params:
+                # immediate fallback one-time to modelId
+                print("No items for modelVersionId; falling back to modelId")
+                model_version_id = None
+                next_page_url = None
+                continue
+
+            if not items:
+                break
+
+            # Group by postId
+            for it in items:
+                pid = it.get('postId')
+                if not pid:
+                    # Some images might be unattached; skip
+                    continue
+                if posts_limit and len(groups) >= posts_limit and pid not in groups:
+                    # Already reached posts limit; skip new postIds
+                    continue
+                # Enforce per-post image limit while grouping
+                if images_per_post_limit and len(groups[pid]) >= images_per_post_limit:
+                    continue
+                groups[pid].append(it)
+
+            next_page_url = metadata.get('nextPage') if isinstance(metadata, dict) else None
+            # Stop early if we've reached both limits and there is no need to fetch more
+            if posts_limit and len(groups) >= posts_limit:
+                # Ensure all groups up to limit are filled to images_per_post_limit if more pages exist is optional; we stop here for efficiency
+                pass
+            if not next_page_url:
+                break
+
+        # Persist groups to disk according to limits
+        for pid in list(groups.keys())[: (posts_limit or len(groups))]:
+            images = groups[pid][: (images_per_post_limit or len(groups[pid]))]
+            post_dir = posts_root / f"post_{pid}"
+            post_dir.mkdir(parents=True, exist_ok=True)
+
+            saved = 0
+            post_meta: Dict = {
+                'postId': pid,
+                'username': images[0].get('username') if images else None,
+                'createdAt': images[0].get('createdAt') if images else None,
+                'stats': images[0].get('stats') if images else None,
+                'imageCount': len(images),
+            }
+            for idx, item in enumerate(images):
+                try:
+                    image_url = item.get('url') or item.get('meta', {}).get('url')
+                    if not image_url:
+                        continue
+                    ext = Path(image_url.split('?')[0]).suffix or '.jpeg'
+                    filename = f"{sanitize_filename(base_name)}_post_{pid}_{idx}{ext}"
+                    target_path = post_dir / filename
+                    rr = session.get(image_url, stream=True, timeout=30)
+                    if rr.status_code == 200:
+                        with open(target_path, 'wb') as f:
+                            for chunk in rr.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                        # Enrich and save image metadata
+                        try:
+                            meta = item.get('meta') if isinstance(item, dict) else None
+                            if isinstance(meta, dict) and isinstance(meta.get('civitaiResources'), list):
+                                enriched = []
+                                for r in meta['civitaiResources']:
+                                    rr_loc = dict(r) if isinstance(r, dict) else {}
+                                    if rr_loc and not rr_loc.get('modelVersionName'):
+                                        mvid = rr_loc.get('modelVersionId') or rr_loc.get('id')
+                                        if mvid:
+                                            info = get_model_version_info_local(int(mvid))
+                                            if info:
+                                                rr_loc['modelVersionName'] = info.get('label') or rr_loc.get('modelVersionName')
+                                                if info.get('modelName'):
+                                                    rr_loc['modelName'] = info['modelName']
+                                                if info.get('versionName'):
+                                                    rr_loc['resolvedVersionName'] = info['versionName']
+                                    enriched.append(rr_loc if rr_loc else r)
+                                meta['civitaiResources'] = enriched
+                        except Exception:
+                            pass
+                        with open(target_path.with_suffix('.json'), 'w', encoding='utf-8') as jf:
+                            json.dump(item, jf, indent=4)
+                        saved += 1
+                except Exception as ie:
+                    print(f"Error downloading post image: {ie}")
+                    continue
+
+            # Save post summary
+            post_meta['savedImages'] = saved
+            try:
+                with open(post_dir / 'post.json', 'w', encoding='utf-8') as pf:
+                    json.dump(post_meta, pf, indent=4)
+            except Exception as je:
+                print(f"Error saving post.json for post {pid}: {je}")
+
+            saved_counts[pid] = saved
+            total_posts_collected += 1
+            if posts_limit and total_posts_collected >= posts_limit:
+                break
+
+        print(f"Saved {len(saved_counts)} user posts with per-post images up to limit {images_per_post_limit or 'ALL'}")
+        return saved_counts
+    except Exception as e:
+        print(f"Error fetching user posts: {e}")
+        return saved_counts
+
+def download_preview_image(
+    image_url: str,
+    output_dir: Path,
+    base_name: str,
+    index: Optional[int] = None,
+    is_video: bool = False,
+    image_data: Optional[Dict] = None,
+    subdir: Optional[str] = None,
+):
+    """
+    Download a preview image or video and save optional metadata.
+
+    Args:
+        image_url (str): URL of the image/video to download
+        output_dir (Path): Base output directory
         base_name (str): Base name of the safetensors file
         index (int, optional): Image index for multiple images
+
     Returns:
-        bool: True if successful, False otherwise
+        Optional[str]: Relative path (to output_dir) of the saved file, or None on failure
     """
     try:
         if not image_url:
-            return False
-            
+            return None
+
         full_size_url = image_url
-        
         print("\nDownloading preview image:")
         print(f"URL: {full_size_url}")
-        
+
         # Ensure subdirectory exists if provided
         target_dir = Path(output_dir)
         if subdir:
@@ -200,7 +363,7 @@ def download_preview_image(image_url, output_dir, base_name, index=None, is_vide
         else:
             print(f"Error: Could not download image (Status code: {response.status_code})")
             return None
-            
+
     except Exception as e:
         print(f"Error downloading preview image: {str(e)}")
         return None
@@ -632,8 +795,10 @@ def process_single_file(
     html_only: bool = False,
     only_update: bool = False,
     session: Optional[requests.Session] = None,
-    user_images_limit: int = 0,
-    user_images_level: str = 'ALL'
+    user_images_level: str = 'ALL',
+    # New limits for posts
+    user_posts_limit: int = 0,
+    images_per_post_limit: int = 0,
 ) -> bool:
     """
     Process a single file
@@ -711,8 +876,8 @@ def process_single_file(
                                     file_path, download_all_images, skip_images, session=session)
         if model_id:
             fetch_model_details(model_id, model_output_dir, file_path, session=session)
-            # Fetch user images if configured
-            if not skip_images and user_images_limit:
+            # Fetch user posts if configured
+            if not skip_images and (user_posts_limit or 0):
                 try:
                     # Load version JSON to get the exact modelVersionId
                     version_json_path = model_output_dir / f"{sanitize_filename(file_path.stem)}_civitai_model_version.json"
@@ -724,17 +889,18 @@ def process_single_file(
                                 model_version_id = vdata.get('id')
                     except Exception:
                         model_version_id = None
-                    fetch_user_images(
-                        model_id,
-                        model_output_dir,
-                        sanitize_filename(file_path.stem),
-                        user_images_limit,
+                    fetch_user_posts(
+                        model_id=model_id,
+                        output_dir=model_output_dir,
+                        base_name=sanitize_filename(file_path.stem),
+                        posts_limit=(user_posts_limit or 0),
+                        images_per_post_limit=images_per_post_limit or 0,
                         session=session,
                         model_version_id=model_version_id,
                         user_images_level=user_images_level,
                     )
                 except Exception as e:
-                    print(f"Warning: failed to fetch user images: {e}")
+                    print(f"Warning: failed to fetch user posts: {e}")
             generate_html_summary(model_output_dir, file_path)
             return True
         else:

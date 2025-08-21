@@ -12,10 +12,11 @@ from wtforms.validators import DataRequired
 from werkzeug.utils import secure_filename
 import threading
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 from datetime import datetime
 import html # Add this import
 import logging
+import requests
 
 from civitai_manager.src.core.metadata_manager import (
     process_single_file,
@@ -63,6 +64,110 @@ app = create_app()
 processing_thread = None
 cancel_processing_flag = threading.Event()
 
+# Simple in-memory cache for Civitai model version lookups
+_MODEL_VERSION_CACHE: Dict[int, Dict[str, str]] = {}
+_CACHE_LOADED: bool = False
+
+def _cache_file_path() -> Optional[Path]:
+    """Return path to persistent cache JSON in the configured output directory."""
+    try:
+        cfg = load_web_config(app.config['CONFIG_FILE'])
+        out = cfg.get('output_directory')
+        if not out:
+            return None
+        return Path(out) / '_cache' / 'civitai_versions.json'
+    except Exception:
+        return None
+
+def _ensure_cache_loaded() -> None:
+    """Load persistent cache once into memory."""
+    global _CACHE_LOADED
+    if _CACHE_LOADED:
+        return
+    _CACHE_LOADED = True
+    path = _cache_file_path()
+    if not path or not path.exists():
+        return
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    try:
+                        _MODEL_VERSION_CACHE[int(k)] = v if isinstance(v, dict) else {}
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+
+def _save_cache_entry(version_id: int, payload: Dict[str, str]) -> None:
+    """Persist a single cache entry to disk."""
+    path = _cache_file_path()
+    if not path:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing: Dict[str, Dict[str, str]] = {}
+        if path.exists():
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    existing = json.load(f) or {}
+            except Exception:
+                existing = {}
+        existing[str(int(version_id))] = payload
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, indent=2)
+    except Exception:
+        pass
+
+def _requests_session_with_headers() -> requests.Session:
+    """Create a requests session with browser-like headers and optional token."""
+    s = requests.Session()
+    s.headers.update({
+        'Accept': 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Referer': 'https://civitai.com/'
+    })
+    token = os.environ.get('CIVITAI_API_TOKEN')
+    if token:
+        s.headers['Authorization'] = f'Bearer {token}'
+    return s
+
+def get_model_version_info(version_id: int) -> Optional[Dict[str, str]]:
+    """Resolve a Civitai model version ID to names and cache the result.
+
+    Returns a dict with keys: modelName, versionName, label.
+    """
+    try:
+        if not version_id:
+            return None
+        # Load persistent cache lazily
+        _ensure_cache_loaded()
+        if version_id in _MODEL_VERSION_CACHE:
+            return _MODEL_VERSION_CACHE[version_id]
+        session = _requests_session_with_headers()
+        url = f"https://civitai.com/api/v1/model-versions/{int(version_id)}"
+        resp = session.get(url, timeout=20)
+        if resp.status_code != 200:
+            # Cache negative lookup to avoid spamming
+            _MODEL_VERSION_CACHE[version_id] = {}
+            _save_cache_entry(version_id, {})
+            return None
+        data = resp.json() if resp.content else {}
+        model_name = (data.get('model') or {}).get('name') if isinstance(data, dict) else None
+        version_name = data.get('name') if isinstance(data, dict) else None
+        label = f"{model_name} - {version_name}" if model_name and version_name else (version_name or model_name or str(version_id))
+        result = {
+            'modelName': model_name or '',
+            'versionName': version_name or '',
+            'label': label,
+        }
+        _MODEL_VERSION_CACHE[version_id] = result
+        _save_cache_entry(version_id, result)
+        return result
+    except Exception:
+        return None
+
 def is_configured(app_instance):
     """Check if the application is configured with valid directories"""
     models_dir = app_instance.config.get('models_directory') # Use 'models_directory' from config
@@ -92,8 +197,10 @@ if not os.path.exists(CONFIG_FILE):
         'download_all_images': False,
         'skip_images': False,
         'notimeout': False,
-        'user_images_limit': 0,
+    'user_images_limit': 0,
     'user_images_level': 'ALL',
+    'user_posts_limit': 0,
+    'images_per_post_limit': 0,
     }
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     with open(CONFIG_FILE, 'w') as f:
@@ -105,7 +212,6 @@ class ConfigForm(FlaskForm):
     download_all_images = BooleanField('Download All Images')
     skip_images = BooleanField('Skip Images')
     notimeout = BooleanField('No Timeout (may trigger rate limiting)')
-    user_images_limit = IntegerField('User Images per Model', default=0)
     user_images_level = SelectField(
         'Browsing Level',
         choices=[
@@ -118,6 +224,8 @@ class ConfigForm(FlaskForm):
         ],
         default='ALL'
     )
+    user_posts_limit = IntegerField('User Posts per Model', default=0)
+    images_per_post_limit = IntegerField('Images per Post', default=0)
     submit = SubmitField('Save Configuration')
 
 class UploadForm(FlaskForm):
@@ -408,8 +516,9 @@ def settings():
             'download_all_images': form.download_all_images.data,
             'skip_images': form.skip_images.data,
             'notimeout': form.notimeout.data,
-            'user_images_limit': max(0, form.user_images_limit.data or 0),
             'user_images_level': form.user_images_level.data or 'ALL',
+            'user_posts_limit': max(0, form.user_posts_limit.data or 0),
+            'images_per_post_limit': max(0, form.images_per_post_limit.data or 0),
         }
         
         if save_web_config(config_data, app.config['CONFIG_FILE']):
@@ -425,8 +534,9 @@ def settings():
         form.download_all_images.data = current_config.get('download_all_images', True)
         form.skip_images.data = current_config.get('skip_images', False)
         form.notimeout.data = current_config.get('notimeout', False)
-    form.user_images_limit.data = current_config.get('user_images_limit', 0)
     form.user_images_level.data = current_config.get('user_images_level', 'ALL')
+    form.user_posts_limit.data = current_config.get('user_posts_limit', 0)
+    form.images_per_post_limit.data = current_config.get('images_per_post_limit', 0)
     
     return render_template('settings.html', form=form)
 
@@ -472,8 +582,9 @@ def upload():
                     download_all_images=config.get('download_all_images', True),
                     skip_images=config.get('skip_images', False),
                     session=None,
-                    user_images_limit=int(config.get('user_images_limit', 0) or 0),
                     user_images_level=str(config.get('user_images_level', 'ALL') or 'ALL'),
+                    user_posts_limit=int(config.get('user_posts_limit', 0) or 0),
+                    images_per_post_limit=int(config.get('images_per_post_limit', 0) or 0),
                 )
                 
                 if success:
@@ -535,8 +646,9 @@ def process_all():
                 config.get('notimeout', False),
                 download_all_images=config.get('download_all_images', True),
                 skip_images=config.get('skip_images', False),
-                user_images_limit=int(config.get('user_images_limit', 0) or 0),
                 user_images_level=str(config.get('user_images_level', 'ALL') or 'ALL'),
+                user_posts_limit=int(config.get('user_posts_limit', 0) or 0),
+                images_per_post_limit=int(config.get('images_per_post_limit', 0) or 0),
                 cancel_flag=cancel_processing_flag # Pass the flag
             )
             # Ensure thread is cleared and flag reset immediately after processing
@@ -659,32 +771,117 @@ def model_detail(model_name):
                     version_data['images'][i]['local_url'] = url_for('static', filename='placeholder.png')
         print(f"DEBUG: Processed images in {time.time() - process_images_start:.4f} seconds")
 
-        # Load user images list if downloaded (scan user_images folder)
-        user_images_dir = os.path.join(model_path, 'user_images')
-        user_images = []
-        if os.path.isdir(user_images_dir):
+    # Load user posts if downloaded (scan user_posts/<post_xxx>)
+        posts_dir = os.path.join(model_path, 'user_posts')
+        user_posts = []
+        if os.path.isdir(posts_dir):
             SUPPORTED_IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif')
             SUPPORTED_VIDEO_EXTS = ('.mp4', '.webm', '.ogg')
-            for fname in sorted(os.listdir(user_images_dir)):
-                lower = fname.lower()
-                if lower.endswith(SUPPORTED_IMAGE_EXTS + SUPPORTED_VIDEO_EXTS):
-                    rel_path = f"{model_name}/user_images/{fname}"
-                    meta_path = os.path.join(user_images_dir, Path(fname).with_suffix('.json').name)
-                    meta = {}
-                    if os.path.exists(meta_path):
-                        try:
-                            with open(meta_path, 'r') as mf:
-                                meta = json.load(mf)
-                        except Exception:
-                            meta = {}
-                    utype = 'video' if lower.endswith(SUPPORTED_VIDEO_EXTS) else 'image'
-                    user_images.append({
-                        'local_url': url_for('local_static_files', filename=rel_path),
-                        'type': utype,
-                        'meta': meta.get('meta') or meta
-                    })
-        if user_images:
-            version_data['user_images'] = user_images
+            for entry in sorted(os.listdir(posts_dir)):
+                if not entry.startswith('post_'):
+                    continue
+                pdir = os.path.join(posts_dir, entry)
+                if not os.path.isdir(pdir):
+                    continue
+                # read post.json if exists
+                post_meta = {}
+                post_json = os.path.join(pdir, 'post.json')
+                if os.path.exists(post_json):
+                    try:
+                        with open(post_json, 'r') as pf:
+                            post_meta = json.load(pf)
+                    except Exception:
+                        post_meta = {}
+                # collect media files
+                media = []
+                for fname in sorted(os.listdir(pdir)):
+                    if fname == 'post.json':
+                        continue
+                    lower = fname.lower()
+                    if lower.endswith(SUPPORTED_IMAGE_EXTS + SUPPORTED_VIDEO_EXTS):
+                        rel_path = f"{model_name}/user_posts/{entry}/{fname}"
+                        meta_path = os.path.join(pdir, Path(fname).with_suffix('.json').name)
+                        meta = {}
+                        if os.path.exists(meta_path):
+                            try:
+                                with open(meta_path, 'r') as mf:
+                                    meta = json.load(mf)
+                            except Exception:
+                                meta = {}
+                        utype = 'video' if lower.endswith(SUPPORTED_VIDEO_EXTS) else 'image'
+                        # Extract meta and resources if available
+                        meta_obj = meta.get('meta') if isinstance(meta, dict) else {}
+                        resources_top = meta.get('resources') if isinstance(meta, dict) else []
+                        civitai_resources = meta_obj.get('civitaiResources') if isinstance(meta_obj, dict) else []
+                        # Normalize and merge both lists, resolving names via modelVersionId
+                        merged_resources = []
+                        seen = set()
+                        def key_of(x: Dict) -> str:
+                            t = (x.get('type') or '').lower()
+                            mvid = str(x.get('modelVersionId') or x.get('id') or '')
+                            nm = (x.get('name') or x.get('modelVersionName') or '').strip().lower()
+                            wt = str(x.get('weight') or '')
+                            return '|'.join([t, mvid, nm, wt])
+                        def push(rr: Dict):
+                            k = key_of(rr)
+                            if k not in seen:
+                                seen.add(k)
+                                merged_resources.append(rr)
+                        # First, normalize top-level resources
+                        if isinstance(resources_top, list):
+                            for r in resources_top:
+                                if not isinstance(r, dict):
+                                    continue
+                                rr = dict(r)
+                                mvid = rr.get('modelVersionId') or rr.get('id')
+                                if mvid and not rr.get('modelVersionName'):
+                                    info = get_model_version_info(int(mvid))
+                                    if info:
+                                        rr['modelVersionName'] = info.get('label') or rr.get('modelVersionName')
+                                        if info.get('modelName'):
+                                            rr['modelName'] = info['modelName']
+                                        if info.get('versionName'):
+                                            rr['resolvedVersionName'] = info['versionName']
+                                push(rr)
+                        # Then, normalize civitaiResources from meta
+                        if isinstance(civitai_resources, list):
+                            for r in civitai_resources:
+                                if not isinstance(r, dict):
+                                    continue
+                                rr = dict(r)
+                                # Map common fields if needed
+                                if rr.get('modelVersionId') and not rr.get('modelVersionName'):
+                                    info = get_model_version_info(int(rr['modelVersionId']))
+                                    if info:
+                                        rr['modelVersionName'] = info.get('label') or rr.get('modelVersionName')
+                                        if info.get('modelName'):
+                                            rr['modelName'] = info['modelName']
+                                        if info.get('versionName'):
+                                            rr['resolvedVersionName'] = info['versionName']
+                                push(rr)
+                        base_model_top = meta.get('baseModel') if isinstance(meta, dict) else None
+                        media.append({
+                            'local_url': url_for('local_static_files', filename=rel_path),
+                            'type': utype,
+                            'meta': meta_obj or meta,
+                            'resources': merged_resources,
+                            'civitaiResources': [],
+                            'baseModel': base_model_top
+                        })
+                user_posts.append({
+                    'post_id': post_meta.get('postId') or entry.replace('post_', ''),
+                    'meta': post_meta,
+                    'media': media,
+                })
+        # Apply pagination to user_posts
+        posts_page = request.args.get('posts_page', default=1, type=int) or 1
+        posts_per_page = 12
+        posts_total = len(user_posts)
+        posts_total_pages = (posts_total + posts_per_page - 1) // posts_per_page if posts_total else 0
+        if user_posts:
+            start = (posts_page - 1) * posts_per_page
+            end = start + posts_per_page
+            version_data['user_posts'] = user_posts[start:end]
 
         # Fallback for metadata
         if not metadata:
@@ -729,7 +926,9 @@ def model_detail(model_name):
                          model_files=model_files,
                          metadata=metadata,
                          version=version_data,
-                         likes_fill_width=likes_fill_width)
+                         likes_fill_width=likes_fill_width,
+                         posts_current_page=posts_page,
+                         posts_total_pages=posts_total_pages)
 
 @app.route('/local_static/<path:filename>')
 def local_static_files(filename):

@@ -29,7 +29,7 @@ class ProcessingMetrics:
         return self.processed_files / self.elapsed_time
 
 class BatchProcessor:
-    def __init__(self, max_workers: int = 4, download_all_images: bool = False, skip_images: bool = False, html_only: bool = False, only_update: bool = False, user_images_limit: int = 0, user_images_level: str = 'ALL'):
+    def __init__(self, max_workers: int = 4, download_all_images: bool = False, skip_images: bool = False, html_only: bool = False, only_update: bool = False, user_images_level: str = 'ALL', user_posts_limit: int = 0, images_per_post_limit: int = 0):
         self.max_workers = max_workers
         self.metrics = ProcessingMetrics()
         self.session = requests.Session()  # Reuse HTTP session
@@ -38,8 +38,9 @@ class BatchProcessor:
         self.skip_images = skip_images
         self.html_only = html_only
         self.only_update = only_update
-        self.user_images_limit = user_images_limit
         self.user_images_level = user_images_level
+        self.user_posts_limit = user_posts_limit
+        self.images_per_post_limit = images_per_post_limit
         
     def process_files(self, files: List[Path], output_dir: Path) -> ProcessingMetrics:
         """Process multiple files concurrently"""
@@ -62,8 +63,9 @@ class BatchProcessor:
                         self.html_only,
                         self.only_update,
                         self.session,
-                        self.user_images_limit,
                         self.user_images_level,
+                        self.user_posts_limit,
+                        self.images_per_post_limit,
                     )
                 )
             

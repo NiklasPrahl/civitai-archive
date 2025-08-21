@@ -235,47 +235,128 @@
     </div>
 </div>
 
-<!-- User Images Gallery -->
+<!-- User Posts -->
 <div class="row mt-4">
     <div class="col-12">
         <div class="card shadow-sm">
             <div class="card-header d-flex align-items-center justify-content-between">
-                <h5 class="mb-0"><i class="fas fa-users me-2"></i>User Images</h5>
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>User Posts</h5>
                 <span class="text-muted small">from Civitai</span>
             </div>
             <div class="card-body">
-                {% set user_dir = url_for('local_static_files', filename=model_name + '/user_images/') %}
-                {% set base_dir = url_for('local_static_files', filename=model_name + '/') %}
-                {% set previews_dir = url_for('local_static_files', filename=model_name + '/previews/') %}
-                {% set user_images = [] %}
-                {% set previews = [] %}
-                {# Server doesn't list directories via template; image URLs are set in version.images for previews. For user images, we'll infer filenames in web_app route in future enhancement. #}
-                {% if version.user_images %}
-                    <div class="row g-2">
-                        {% for uimg in version.user_images %}
-                            <div class="col-6 col-md-3 col-lg-2">
-                                <div class="position-relative">
-                                    {% if uimg.type == 'video' or (uimg.local_url.endswith('.mp4') or uimg.local_url.endswith('.webm') or uimg.local_url.endswith('.ogg')) %}
-                                        <video class="w-100 rounded" controls>
-                                            <source src="{{ uimg.local_url }}" type="video/mp4">
+                {% if version.user_posts %}
+                <div class="row g-3">
+                    {% for post in version.user_posts %}
+                    {% set post_idx = loop.index %}
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <div class="border rounded h-100 d-flex flex-column">
+                            <div class="position-relative" role="button" data-bs-toggle="modal" data-bs-target="#postModal-{{ post_idx }}" style="height: 250px;">
+                                {% set first = post.media[0] if post.media and post.media|length > 0 else None %}
+                                {% if first %}
+                                    {% if first.type == 'video' %}
+                                        <video class="w-100 h-100 rounded-top" muted style="object-fit: cover; object-position: center;">
+                                            <source src="{{ first.local_url }}" type="video/mp4">
                                         </video>
                                     {% else %}
-                                        <img src="{{ uimg.local_url }}" class="img-fluid rounded" alt="User image {{ loop.index }}">
+                                        <img src="{{ first.local_url }}" class="w-100 h-100 rounded-top" alt="Post {{ post.post_id }} thumbnail" style="object-fit: cover; object-position: center;">
                                     {% endif %}
-                                    <button type="button" class="btn btn-light btn-circle position-absolute top-0 start-0 m-1 shadow-sm" title="Info" data-bs-toggle="modal" data-bs-target="#imageInfoModal" data-image-meta='{{ (uimg|tojson)|safe }}'>
-                                        <i class="fas fa-info"></i>
-                                    </button>
+                                {% else %}
+                                    <div class="d-flex align-items-center justify-content-center bg-light rounded-top">
+                                        <i class="fas fa-image fa-2x text-muted"></i>
+                                    </div>
+                                {% endif %}
+                                <span class="position-absolute top-0 end-0 badge bg-dark m-2">{{ post.media|length }}</span>
+                            </div>
+                            <div class="p-2 small text-muted d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-user me-1"></i>{{ post.meta.username or 'Unknown' }}
+                                </div>
+                                <div>
+                                    <i class="fas fa-calendar-alt me-1"></i>{{ post.meta.createdAt or '' }}
                                 </div>
                             </div>
-                        {% endfor %}
+                        </div>
                     </div>
+
+                    <!-- Post Modal with Carousel -->
+                    <div class="modal fade" id="postModal-{{ post_idx }}" tabindex="-1" aria-labelledby="postModalLabel-{{ post_idx }}" aria-hidden="true">
+                        <div class="modal-dialog modal-xl modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="postModalLabel-{{ post_idx }}">Post {{ post.post_id }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    {% set has_multiple = post.media|length > 1 %}
+                                    <div id="carousel-{{ post_idx }}" class="carousel slide position-relative" data-bs-interval="false">
+                                        <div class="carousel-inner">
+                                            {% for media in post.media %}
+                                            <div class="carousel-item {% if loop.first %}active{% endif %}" data-image-meta='{{ (media|tojson)|safe }}'>
+                                                <div class="d-flex justify-content-center align-items-center" style="min-height:60vh;background:#000;">
+                                                    {% if media.type == 'video' %}
+                                                        <video controls class="w-100" style="max-height:70vh;">
+                                                            <source src="{{ media.local_url }}" type="video/mp4">
+                                                        </video>
+                                                    {% else %}
+                                                        <img src="{{ media.local_url }}" class="d-block" alt="Post image {{ loop.index }}" style="max-height:70vh; max-width:100%; object-fit:contain;">
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        <!-- Fixed Info button overlay -->
+                                        <div class="position-absolute top-0 start-0 p-2 w-100 d-flex justify-content-end" style="z-index: 5;">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm post-info-btn" data-bs-toggle="modal" data-bs-target="#imageInfoModal" data-carousel-id="carousel-{{ post_idx }}">
+                                                <i class="fas fa-info me-1"></i> Info
+                                            </button>
+                                        </div>
+                                        {% if has_multiple %}
+                                            <div class="carousel-indicators">
+                                                {% for media in post.media %}
+                                                <button type="button" data-bs-target="#carousel-{{ post_idx }}" data-bs-slide-to="{{ loop.index0 }}" class="{% if loop.first %}active{% endif %}" aria-current="{% if loop.first %}true{% else %}false{% endif %}" aria-label="Slide {{ loop.index }}"></button>
+                                                {% endfor %}
+                                            </div>
+                                            <button class="carousel-control-prev" type="button" data-bs-target="#carousel-{{ post_idx }}" data-bs-slide="prev">
+                                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Previous</span>
+                                            </button>
+                                            <button class="carousel-control-next" type="button" data-bs-target="#carousel-{{ post_idx }}" data-bs-slide="next">
+                                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Next</span>
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if posts_total_pages and posts_total_pages > 1 %}
+                <nav aria-label="User posts pages" class="mt-3">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item {% if posts_current_page <= 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('model_detail', model_name=model_name, posts_page=posts_current_page-1) }}" tabindex="-1">Previous</a>
+                        </li>
+                        {% for p in range(1, posts_total_pages + 1) %}
+                        <li class="page-item {% if p == posts_current_page %}active{% endif %}"><a class="page-link" href="{{ url_for('model_detail', model_name=model_name, posts_page=p) }}">{{ p }}</a></li>
+                        {% endfor %}
+                        <li class="page-item {% if posts_current_page >= posts_total_pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('model_detail', model_name=model_name, posts_page=posts_current_page+1) }}">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+                {% endif %}
                 {% else %}
-                    <p class="text-muted mb-0">No user images downloaded.</p>
+                    <p class="text-muted mb-0">No user posts downloaded.</p>
                 {% endif %}
             </div>
         </div>
     </div>
-  
+
     <!-- Image Info Modal -->
     <div class="modal fade" id="imageInfoModal" tabindex="-1" aria-labelledby="imageInfoModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
@@ -342,12 +423,27 @@
             });
         }
     });
+            // Stop videos when closing any post modal
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('hidden.bs.modal', () => {
+                modal.querySelectorAll('video').forEach(v => { try { v.pause(); v.currentTime = 0; } catch(e){} });
+            });
+        });
             // Info modal handler
         const imageInfoModal = document.getElementById('imageInfoModal');
         if (imageInfoModal) {
             imageInfoModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
-                const raw = button?.getAttribute('data-image-meta');
+                // If triggered by the fixed overlay button, resolve current active slide's meta
+                let raw = button?.getAttribute('data-image-meta');
+                if (!raw && button && button.classList.contains('post-info-btn')) {
+                    const cid = button.getAttribute('data-carousel-id');
+                    const carousel = document.getElementById(cid);
+                    if (carousel) {
+                        const active = carousel.querySelector('.carousel-item.active');
+                        raw = active?.getAttribute('data-image-meta') || '';
+                    }
+                }
                 let html = '<p class="text-muted">No metadata.</p>';
                     const escapeHtml = (str) => {
                         if (str === undefined || str === null) return '';
@@ -373,6 +469,9 @@
                     const data = raw ? JSON.parse(raw) : null;
                     if (data) {
                         const meta = data.meta || data;
+                        const resources = data.resources || [];
+                        const civitaiResources = data.civitaiResources || [];
+                        const baseModelTop = data.baseModel || (meta.baseModel || meta.Model || meta.model);
                             let parts = [];
                             if (meta.prompt) parts.push(copyableField('Prompt', meta.prompt, 5));
                             if (meta.negativePrompt) parts.push(copyableField('Negative Prompt', meta.negativePrompt, 4));
@@ -391,6 +490,28 @@
                                     <div class="small text-break">${typeof v === 'object' ? escapeHtml(JSON.stringify(v)) : escapeHtml(v)}</div>
                                 </div>
                             `));
+                            if (baseModelTop) {
+                                parts.push(`<div class="mb-2"><strong>Base Model</strong><div class="small text-break">${escapeHtml(baseModelTop)}</div></div>`);
+                            }
+                            if (resources && resources.length) {
+                                // resources is already unified and deduped server-side
+                                const groups = resources.reduce((acc, r) => {
+                                    const t = (r.type || 'Other').toLowerCase();
+                                    acc[t] = acc[t] || [];
+                                    acc[t].push(r);
+                                    return acc;
+                                }, {});
+                                const renderRes = (arr) => arr.map(r => `<li class="small">${escapeHtml(r.name || r.modelVersionName || r.id || '')}${r.weight ? ` <span class='text-muted'>(w=${escapeHtml(r.weight)})</span>`: ''}</li>`).join('');
+                                parts.push('<hr><div class="mb-2"><strong>Resources</strong></div>');
+                                if (groups.model) parts.push(`<div class="mb-2"><strong>Models</strong><ul class="mb-0">${renderRes(groups.model)}</ul></div>`);
+                                if (groups.lora) parts.push(`<div class="mb-2"><strong>LORAs</strong><ul class="mb-0">${renderRes(groups.lora)}</ul></div>`);
+                                if (groups.negative) parts.push(`<div class="mb-2"><strong>Negative</strong><ul class="mb-0">${renderRes(groups.negative)}</ul></div>`);
+                                const otherKeys = Object.keys(groups).filter(k => !['model','lora','negative'].includes(k));
+                                otherKeys.forEach(k => {
+                                    parts.push(`<div class="mb-2"><strong>${escapeHtml(k)}</strong><ul class="mb-0">${renderRes(groups[k])}</ul></div>`);
+                                });
+                            }
+                            // civitaiResources are merged into resources; no separate section
                             html = parts.join('');
                     }
                 } catch (e) {}
