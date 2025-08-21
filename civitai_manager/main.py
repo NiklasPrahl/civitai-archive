@@ -193,7 +193,16 @@ def main():
                             skip_missing=config.get('skipmissing', False))
         
     if ('single' in config or 'all' in config):
-        generate_global_summary(base_output_path)
+        # Derive models_dir for the global summary when available
+        models_dir = None
+        try:
+            if config.get('single'):
+                models_dir = Path(config['single']).parent
+            elif config.get('all'):
+                models_dir = Path(config['all'])
+        except Exception:
+            models_dir = None
+        generate_global_summary(base_output_path, models_dir)
 
 if __name__ == "__main__":
     main()

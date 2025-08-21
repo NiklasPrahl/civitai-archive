@@ -19,11 +19,20 @@ def generate_html_summary(output_dir, safetensors_path):
         hash_path = output_dir / f"{base_name}_hash.json"
         html_path = output_dir / f"{base_name}.html"
         
-        # Find all preview images
-        preview_images = sorted(output_dir.glob(f"{base_name}_preview*.jpg")) + \
-                         sorted(output_dir.glob(f"{base_name}_preview*.jpeg")) + \
-                         sorted(output_dir.glob(f"{base_name}_preview*.png")) + \
-                         sorted(output_dir.glob(f"{base_name}_preview*.mp4"))
+        # Find all preview images (support new 'previews' subfolder and legacy root)
+        previews_root = list(sorted(output_dir.glob(f"{base_name}_preview*.jpg")) +
+                              sorted(output_dir.glob(f"{base_name}_preview*.jpeg")) +
+                              sorted(output_dir.glob(f"{base_name}_preview*.png")) +
+                              sorted(output_dir.glob(f"{base_name}_preview*.mp4")))
+        previews_sub = []
+        try:
+            previews_sub = list(sorted((output_dir / 'previews').glob(f"{base_name}_preview*.jpg")) +
+                                sorted((output_dir / 'previews').glob(f"{base_name}_preview*.jpeg")) +
+                                sorted((output_dir / 'previews').glob(f"{base_name}_preview*.png")) +
+                                sorted((output_dir / 'previews').glob(f"{base_name}_preview*.mp4")))
+        except Exception:
+            previews_sub = []
+        preview_images = previews_sub or previews_root
 
         
         # Check if all required files exist

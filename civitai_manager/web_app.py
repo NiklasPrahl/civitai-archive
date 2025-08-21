@@ -7,7 +7,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms import StringField, BooleanField, SubmitField
+from wtforms import StringField, BooleanField, SubmitField, IntegerField
 from wtforms.validators import DataRequired
 from werkzeug.utils import secure_filename
 import threading
@@ -15,6 +15,7 @@ import time
 from typing import Dict, Optional
 from datetime import datetime
 import html # Add this import
+import logging
 
 from civitai_manager.src.core.metadata_manager import (
     process_single_file,
@@ -90,7 +91,8 @@ if not os.path.exists(CONFIG_FILE):
         'output_directory': OUTPUT_DIR,
         'download_all_images': False,
         'skip_images': False,
-        'notimeout': False
+        'notimeout': False,
+        'user_images_limit': 0,
     }
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     with open(CONFIG_FILE, 'w') as f:
@@ -102,6 +104,7 @@ class ConfigForm(FlaskForm):
     download_all_images = BooleanField('Download All Images')
     skip_images = BooleanField('Skip Images')
     notimeout = BooleanField('No Timeout (may trigger rate limiting)')
+    user_images_limit = IntegerField('User Images per Model', default=0)
     submit = SubmitField('Save Configuration')
 
 class UploadForm(FlaskForm):
@@ -182,8 +185,13 @@ def get_models_info():
                 # Ensure base_name is also HTML escaped for URL generation
                 model['base_name'] = html.escape(item)
                 item_path = os.path.join(output_dir, item)
-                local_images = [f for f in os.listdir(item_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
-                if local_images:
+                local_images = [f for f in os.listdir(item_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))] if os.path.isdir(item_path) else []
+                previews_path = os.path.join(item_path, 'previews')
+                previews_images = [f for f in os.listdir(previews_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))] if os.path.isdir(previews_path) else []
+                if previews_images:
+                    model['preview_image_url'] = url_for('local_static_files', filename=f'{item}/previews/{sorted(previews_images)[0]}')
+                    model['has_images'] = True
+                elif local_images:
                     model['preview_image_url'] = url_for('local_static_files', filename=f'{item}/{sorted(local_images)[0]}')
                     model['has_images'] = True
                 else:
@@ -270,7 +278,12 @@ def get_models_info():
 
                 # Robustly find local preview image
                 local_images = [f for f in os.listdir(item_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
-                if local_images:
+                previews_path = os.path.join(item_path, 'previews')
+                previews_images = [f for f in os.listdir(previews_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))] if os.path.isdir(previews_path) else []
+                if previews_images:
+                    model_info['preview_image_url'] = url_for('local_static_files', filename=f'{item}/previews/{sorted(previews_images)[0]}')
+                    model_info['has_images'] = True
+                elif local_images:
                     model_info['preview_image_url'] = url_for('local_static_files', filename=f'{item}/{sorted(local_images)[0]}')
                     model_info['has_images'] = True
                 else:
@@ -381,7 +394,8 @@ def settings():
             'output_directory': form.output_directory.data,
             'download_all_images': form.download_all_images.data,
             'skip_images': form.skip_images.data,
-            'notimeout': form.notimeout.data
+            'notimeout': form.notimeout.data,
+            'user_images_limit': max(0, form.user_images_limit.data or 0),
         }
         
         if save_web_config(config_data, app.config['CONFIG_FILE']):
@@ -397,6 +411,7 @@ def settings():
         form.download_all_images.data = current_config.get('download_all_images', True)
         form.skip_images.data = current_config.get('skip_images', False)
         form.notimeout.data = current_config.get('notimeout', False)
+    form.user_images_limit.data = current_config.get('user_images_limit', 0)
     
     return render_template('settings.html', form=form)
 
@@ -440,7 +455,9 @@ def upload():
                     Path(file_path), 
                     output_dir,
                     download_all_images=config.get('download_all_images', True),
-                    skip_images=config.get('skip_images', False)
+                    skip_images=config.get('skip_images', False),
+                    session=None,
+                    user_images_limit=int(config.get('user_images_limit', 0) or 0),
                 )
                 
                 if success:
@@ -502,6 +519,7 @@ def process_all():
                 config.get('notimeout', False),
                 download_all_images=config.get('download_all_images', True),
                 skip_images=config.get('skip_images', False),
+                user_images_limit=int(config.get('user_images_limit', 0) or 0),
                 cancel_flag=cancel_processing_flag # Pass the flag
             )
             # Ensure thread is cleared and flag reset immediately after processing
@@ -607,14 +625,44 @@ def model_detail(model_name):
                     url = image_data.get('url', '')
                     ext = Path(url.split('?')[0]).suffix if url else '.jpeg'
 
-                image_filename = f"{model_name}/{model_name}_preview_{i}{ext}"
+                # Prefer new previews/ subfolder
+                image_filename = f"{model_name}/previews/{model_name}_preview_{i}{ext}"
                 full_image_path = os.path.join(output_dir, image_filename)
+                # Fallback to legacy root if not found
+                if not os.path.exists(full_image_path):
+                    legacy_image_filename = f"{model_name}/{model_name}_preview_{i}{ext}"
+                    legacy_full_image_path = os.path.join(output_dir, legacy_image_filename)
+                    if os.path.exists(legacy_full_image_path):
+                        image_filename = legacy_image_filename
+                        full_image_path = legacy_full_image_path
                 
                 if os.path.exists(full_image_path):
                     version_data['images'][i]['local_url'] = url_for('local_static_files', filename=image_filename)
                 else:
                     version_data['images'][i]['local_url'] = url_for('static', filename='placeholder.png')
         print(f"DEBUG: Processed images in {time.time() - process_images_start:.4f} seconds")
+
+        # Load user images list if downloaded (scan user_images folder)
+        user_images_dir = os.path.join(model_path, 'user_images')
+        user_images = []
+        if os.path.isdir(user_images_dir):
+            for fname in sorted(os.listdir(user_images_dir)):
+                if fname.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                    img_path_rel = f"{model_name}/user_images/{fname}"
+                    meta_path = os.path.join(user_images_dir, Path(fname).with_suffix('.json').name)
+                    meta = {}
+                    if os.path.exists(meta_path):
+                        try:
+                            with open(meta_path, 'r') as mf:
+                                meta = json.load(mf)
+                        except Exception:
+                            meta = {}
+                    user_images.append({
+                        'local_url': url_for('local_static_files', filename=img_path_rel),
+                        'meta': meta.get('meta') or meta
+                    })
+        if user_images:
+            version_data['user_images'] = user_images
 
         # Fallback for metadata
         if not metadata:

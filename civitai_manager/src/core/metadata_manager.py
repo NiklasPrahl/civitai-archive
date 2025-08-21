@@ -268,6 +268,7 @@ def process_directory(
     only_update: bool = False,
     skip_missing: bool = False,
     max_workers: int = 4,
+    user_images_limit: int = 0,
     cancel_flag = None
 ) -> Tuple[int, int, int]:
     """
@@ -299,7 +300,8 @@ def process_directory(
         download_all_images=download_all_images,
         skip_images=skip_images,
         html_only=html_only,
-        only_update=only_update
+        only_update=only_update,
+        user_images_limit=user_images_limit,
     )
     metrics = None
 

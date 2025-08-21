@@ -16,6 +16,8 @@
 
 <div class="row justify-content-center">
     <div class="col-md-8">
+        <form method="POST">
+            {{ form.hidden_tag() }}
         <!-- Configure Directories Card -->
         <div class="card shadow-sm">
             <div class="card-header">
@@ -25,8 +27,6 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST">
-                    {{ form.hidden_tag() }}
                     
                     <div class="mb-3">
                         <label for="{{ form.models_directory.id }}" class="form-label">
@@ -114,16 +114,41 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-                        {{ form.submit(class="btn btn-primary") }}
-                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
-                            Cancel
-                        </a>
-                    </div>
-                </form>
             </div>
         </div>
+
+        <!-- User Images Options as its own separate card below -->
+        <div class="card shadow-sm mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-users me-2"></i>
+                    User Images
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <label class="form-label" for="{{ form.user_images_limit.id }}">
+                            User Images per Model
+                        </label>
+                        {{ form.user_images_limit(class="form-control", min="0", placeholder="0 = disabled") }}
+                    </div>
+                    <div class="col-md-7">
+                        <div class="form-text small mt-3 mt-md-4">
+                            How many user-generated images to fetch for each model (stored under user_images). 0 disables.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                Cancel
+            </a>
+        </div>
+        </form>
         
         <!-- Deleted Model Bin Card -->
         <div class="card shadow-sm mt-4">

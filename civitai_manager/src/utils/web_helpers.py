@@ -46,6 +46,8 @@ def load_web_config(config_file_path=None):
                     config['notimeout'] = False
                 if 'skip_images' not in config:
                     config['skip_images'] = False
+                if 'user_images_limit' not in config:
+                    config['user_images_limit'] = 0
                 
                 return config
         else:

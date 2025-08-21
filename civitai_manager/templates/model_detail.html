@@ -39,6 +39,20 @@
         /* On small screens let the preview take a reasonable height */
         #previewCarousel.swiper { min-height: 260px; }
     }
+
+    /* Round icon button */
+    .btn-circle {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 50% !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .copy-btn {
+        padding: 2px 8px;
+    }
 </style>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <div>
@@ -70,26 +84,29 @@
                 <h5 class="mb-0"><i class="fas fa-images me-2"></i>Preview Images</h5>
             </div>
             <div class="card-body p-0">
-                                                                {% if version.images %}
+                {% if version.images %}
                                                                                                 <div class="swiper" id="previewCarousel">
                                                                     <div class="swiper-wrapper">
                                                                         {% for image in version.images %}
                                                                         <div class="swiper-slide">
-                                                                                                            <div class="position-relative w-100 h-100">
-                                                                                                                {% if image.local_url.endswith((".mp4", ".webm", ".ogg")) %}
-                                                                                                                    <video class="preview-media" controls>
-                                                                                        <source src="{{ image.local_url }}" type="video/mp4">
-                                                                                        Your browser does not support the video tag.
-                                                                                    </video>
-                                                                                                                        {% else %}
-                                                                                                                            <img src="{{ image.local_url or url_for('static', filename='placeholder.png') }}" alt="Preview image {{ loop.index }}" class="preview-media">
-                                                                                                                        {% endif %}
+                                <div class="position-relative w-100 h-100">
+                                    {% if image.local_url.endswith((".mp4", ".webm", ".ogg")) %}
+                                        <video class="preview-media" controls>
+                                            <source src="{{ image.local_url }}" type="video/mp4">
+                                            Your browser does not support the video tag.
+                                        </video>
+                                    {% else %}
+                                        <img src="{{ image.local_url or url_for('static', filename='placeholder.png') }}" alt="Preview image {{ loop.index }}" class="preview-media">
+                                    {% endif %}
+                                    <button type="button" class="btn btn-light btn-circle position-absolute top-0 start-0 m-2 shadow-sm" title="Info" data-bs-toggle="modal" data-bs-target="#imageInfoModal" data-image-meta='{{ (image|tojson)|safe }}'>
+                                        <i class="fas fa-info"></i>
+                                    </button>
                                                                                 {% if image.nsfw %}
                                                                                 <div class="position-absolute top-0 end-0 p-2">
                                                                                     <span class="badge bg-danger">NSFW</span>
                                                                                 </div>
                                                                                 {% endif %}
-                                                                            </div>
+                                </div>
                                                                         </div>
                                                                         {% endfor %}
                                                                     </div>
@@ -218,6 +235,62 @@
     </div>
 </div>
 
+<!-- User Images Gallery -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>User Images</h5>
+                <span class="text-muted small">from Civitai</span>
+            </div>
+            <div class="card-body">
+                {% set user_dir = url_for('local_static_files', filename=model_name + '/user_images/') %}
+                {% set base_dir = url_for('local_static_files', filename=model_name + '/') %}
+                {% set previews_dir = url_for('local_static_files', filename=model_name + '/previews/') %}
+                {% set user_images = [] %}
+                {% set previews = [] %}
+                {# Server doesn't list directories via template; image URLs are set in version.images for previews. For user images, we'll infer filenames in web_app route in future enhancement. #}
+                {% if version.user_images %}
+                    <div class="row g-2">
+                        {% for uimg in version.user_images %}
+                            <div class="col-6 col-md-3 col-lg-2">
+                                <div class="position-relative">
+                                    <img src="{{ uimg.local_url }}" class="img-fluid rounded" alt="User image {{ loop.index }}">
+                                      <button type="button" class="btn btn-light btn-circle position-absolute top-0 start-0 m-1 shadow-sm" title="Info" data-bs-toggle="modal" data-bs-target="#imageInfoModal" data-image-meta='{{ (uimg|tojson)|safe }}'>
+                                        <i class="fas fa-info"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No user images downloaded.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+  
+    <!-- Image Info Modal -->
+    <div class="modal fade" id="imageInfoModal" tabindex="-1" aria-labelledby="imageInfoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageInfoModalLabel">Image Metadata</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="imageMetaContent">
+                        <p class="text-muted">No metadata.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
     #description-container.description-collapsed {
         max-height: 200px; /* Adjust height as needed */
@@ -263,6 +336,76 @@
             });
         }
     });
+            // Info modal handler
+        const imageInfoModal = document.getElementById('imageInfoModal');
+        if (imageInfoModal) {
+            imageInfoModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const raw = button?.getAttribute('data-image-meta');
+                let html = '<p class="text-muted">No metadata.</p>';
+                    const escapeHtml = (str) => {
+                        if (str === undefined || str === null) return '';
+                        return String(str)
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#039;');
+                    };
+                    const copyableField = (label, value, rows=4) => `
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <strong>${label}</strong>
+                                <button type="button" class="btn btn-outline-secondary btn-sm copy-btn" data-copy="${escapeHtml(value)}" title="Copy">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <textarea class="form-control" rows="${rows}" readonly>${escapeHtml(value)}</textarea>
+                        </div>
+                    `;
+                try {
+                    const data = raw ? JSON.parse(raw) : null;
+                    if (data) {
+                        const meta = data.meta || data;
+                            let parts = [];
+                            if (meta.prompt) parts.push(copyableField('Prompt', meta.prompt, 5));
+                            if (meta.negativePrompt) parts.push(copyableField('Negative Prompt', meta.negativePrompt, 4));
+                            const simpleFields = [
+                                ['Steps', meta.steps],
+                                ['Sampler', meta.sampler],
+                                ['CFG Scale', meta.cfgScale],
+                                ['Seed', meta.seed],
+                                ['Model', meta.Model || meta.model],
+                                ['Size', meta.Size || meta.size],
+                                ['Clip skip', meta['Clip skip'] || meta.clipSkip]
+                            ];
+                            parts = parts.concat(simpleFields.filter(([,v]) => v !== undefined && v !== null && v !== '').map(([k,v]) => `
+                                <div class="mb-2">
+                                    <strong>${k}:</strong>
+                                    <div class="small text-break">${typeof v === 'object' ? escapeHtml(JSON.stringify(v)) : escapeHtml(v)}</div>
+                                </div>
+                            `));
+                            html = parts.join('');
+                    }
+                } catch (e) {}
+                document.getElementById('imageMetaContent').innerHTML = html;
+                    // Bind copy buttons
+                    const btns = imageInfoModal.querySelectorAll('.copy-btn');
+                    btns.forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const text = btn.getAttribute('data-copy') || '';
+                            navigator.clipboard?.writeText(text).then(() => {
+                                btn.classList.remove('btn-outline-secondary');
+                                btn.classList.add('btn-success');
+                                setTimeout(() => {
+                                    btn.classList.add('btn-outline-secondary');
+                                    btn.classList.remove('btn-success');
+                                }, 1000);
+                            }).catch(() => {});
+                        });
+                    });
+            });
+        }
 </script>
 <!-- Delete Modal -->
 <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
