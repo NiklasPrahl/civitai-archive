@@ -66,7 +66,7 @@ def generate_global_summary(output_dir, models_dir):
                     # Add model data
                     'name': html.escape(model_data.get('name') or 'Unknown'),
                     'type': model_type,
-                    'author': html.escape(model_data.get('creator', {}).get('username', 'Unknown')),
+                    'creator': html.escape(model_data.get('creator', {}).get('username', 'Unknown')),
                     'base_name': base_name,
                     'html_file': f"{base_name}.html",
                     'tags': [html.escape(tag) for tag in model_data.get('tags', [])],
@@ -169,11 +169,12 @@ def generate_global_summary(output_dir, models_dir):
                 sanitized_base_name = sanitize_filename(model['base_name'])
                 preview_path = f"{sanitized_base_name}/{sanitized_base_name}_preview_0.jpeg"
                 
+                creator_text = model.get('creator') or 'Unknown'
                 card_html = f"""
                     <div class="model-card{' missing' if model.get('missing') else ''}{' processed' if model.get('has_html') else ''}" 
                     data-tags="{','.join(model['tags']).lower()}"
                     data-name="{(model['name'] or '').lower()}"
-                    data-author="{(model['author'] or '').lower()}"
+                    data-creator="{(creator_text or '').lower()}"
                     data-downloads="{model['downloads']}"
                     data-filename="{model['base_name'].lower()}"
                     data-raw-size="{model.get('file_size', 0)}"
@@ -181,7 +182,7 @@ def generate_global_summary(output_dir, models_dir):
                         <img class="model-cover" src="{preview_path}" onerror="if (this.src.includes('preview_0')) {{ this.src = this.src.replace('preview_0', 'preview_1'); }} else {{ this.style.display='none'; }}" loading="lazy">
                         <h3>{model_name}</h3>
                         <small class="version-name">{model.get('version_name', '')}</small>
-                        <div>by {model['author']}</div>
+                        <div>by {creator_text}</div>
                         {base_model_section}
                         {downloads_section}
                         {filesize_section}

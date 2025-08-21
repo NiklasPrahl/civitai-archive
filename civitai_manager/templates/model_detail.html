@@ -255,8 +255,14 @@
                         {% for uimg in version.user_images %}
                             <div class="col-6 col-md-3 col-lg-2">
                                 <div class="position-relative">
-                                    <img src="{{ uimg.local_url }}" class="img-fluid rounded" alt="User image {{ loop.index }}">
-                                      <button type="button" class="btn btn-light btn-circle position-absolute top-0 start-0 m-1 shadow-sm" title="Info" data-bs-toggle="modal" data-bs-target="#imageInfoModal" data-image-meta='{{ (uimg|tojson)|safe }}'>
+                                    {% if uimg.type == 'video' or (uimg.local_url.endswith('.mp4') or uimg.local_url.endswith('.webm') or uimg.local_url.endswith('.ogg')) %}
+                                        <video class="w-100 rounded" controls>
+                                            <source src="{{ uimg.local_url }}" type="video/mp4">
+                                        </video>
+                                    {% else %}
+                                        <img src="{{ uimg.local_url }}" class="img-fluid rounded" alt="User image {{ loop.index }}">
+                                    {% endif %}
+                                    <button type="button" class="btn btn-light btn-circle position-absolute top-0 start-0 m-1 shadow-sm" title="Info" data-bs-toggle="modal" data-bs-target="#imageInfoModal" data-image-meta='{{ (uimg|tojson)|safe }}'>
                                         <i class="fas fa-info"></i>
                                     </button>
                                 </div>

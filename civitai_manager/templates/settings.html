@@ -126,19 +126,36 @@
                 </h5>
             </div>
             <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-md-5">
-                        <label class="form-label" for="{{ form.user_images_limit.id }}">
-                            User Images per Model
-                        </label>
-                        {{ form.user_images_limit(class="form-control", min="0", placeholder="0 = disabled") }}
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form.user_images_limit.id }}">
+                        User Images per Model
+                    </label>
+                    {{ form.user_images_limit(class="form-control", min="0", placeholder="0 = disabled") }}
+                </div>
+                <div class="mb-2 d-flex align-items-center">
+                    <div class="flex-grow-1 me-2">
+                        <label class="form-label" for="{{ form.user_images_level.id }}">Browsing Level</label>
+                        {{ form.user_images_level(class="form-select") }}
                     </div>
-                    <div class="col-md-7">
-                        <div class="form-text small mt-3 mt-md-4">
-                            How many user-generated images to fetch for each model (stored under user_images). 0 disables.
-                        </div>
+                    <div class="align-self-end mb-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="popover" data-bs-placement="right" data-bs-html="true" title="Browsing Levels" data-bs-content="<ul class='mb-0'>
+<li><strong>PG</strong>: Safe for work</li>
+<li><strong>PG-13</strong>: Revealing clothing, light gore/violence</li>
+<li><strong>R</strong>: Adult themes, partial nudity</li>
+<li><strong>X</strong>: Graphic nudity</li>
+<li><strong>XXX</strong>: Sexual acts/extreme content</li>
+<li><strong>No restriction (ALL)</strong>: Includes everything</li>
+</ul>">
+                            <i class="fas fa-info"></i>
+                        </button>
                     </div>
                 </div>
+                <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+                    popoverTriggerList.map(function (el) { return new bootstrap.Popover(el); });
+                });
+                </script>
             </div>
         </div>
         

@@ -7,7 +7,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms import StringField, BooleanField, SubmitField, IntegerField
+from wtforms import StringField, BooleanField, SubmitField, IntegerField, SelectField
 from wtforms.validators import DataRequired
 from werkzeug.utils import secure_filename
 import threading
@@ -93,6 +93,7 @@ if not os.path.exists(CONFIG_FILE):
         'skip_images': False,
         'notimeout': False,
         'user_images_limit': 0,
+    'user_images_level': 'ALL',
     }
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     with open(CONFIG_FILE, 'w') as f:
@@ -105,6 +106,18 @@ class ConfigForm(FlaskForm):
     skip_images = BooleanField('Skip Images')
     notimeout = BooleanField('No Timeout (may trigger rate limiting)')
     user_images_limit = IntegerField('User Images per Model', default=0)
+    user_images_level = SelectField(
+        'Browsing Level',
+        choices=[
+            ('ALL', 'No restriction (ALL)'),
+            ('PG', 'PG'),
+            ('PG-13', 'PG-13'),
+            ('R', 'R'),
+            ('X', 'X'),
+            ('XXX', 'XXX'),
+        ],
+        default='ALL'
+    )
     submit = SubmitField('Save Configuration')
 
 class UploadForm(FlaskForm):
@@ -396,6 +409,7 @@ def settings():
             'skip_images': form.skip_images.data,
             'notimeout': form.notimeout.data,
             'user_images_limit': max(0, form.user_images_limit.data or 0),
+            'user_images_level': form.user_images_level.data or 'ALL',
         }
         
         if save_web_config(config_data, app.config['CONFIG_FILE']):
@@ -412,6 +426,7 @@ def settings():
         form.skip_images.data = current_config.get('skip_images', False)
         form.notimeout.data = current_config.get('notimeout', False)
     form.user_images_limit.data = current_config.get('user_images_limit', 0)
+    form.user_images_level.data = current_config.get('user_images_level', 'ALL')
     
     return render_template('settings.html', form=form)
 
@@ -458,6 +473,7 @@ def upload():
                     skip_images=config.get('skip_images', False),
                     session=None,
                     user_images_limit=int(config.get('user_images_limit', 0) or 0),
+                    user_images_level=str(config.get('user_images_level', 'ALL') or 'ALL'),
                 )
                 
                 if success:
@@ -520,6 +536,7 @@ def process_all():
                 download_all_images=config.get('download_all_images', True),
                 skip_images=config.get('skip_images', False),
                 user_images_limit=int(config.get('user_images_limit', 0) or 0),
+                user_images_level=str(config.get('user_images_level', 'ALL') or 'ALL'),
                 cancel_flag=cancel_processing_flag # Pass the flag
             )
             # Ensure thread is cleared and flag reset immediately after processing
@@ -646,9 +663,12 @@ def model_detail(model_name):
         user_images_dir = os.path.join(model_path, 'user_images')
         user_images = []
         if os.path.isdir(user_images_dir):
+            SUPPORTED_IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif')
+            SUPPORTED_VIDEO_EXTS = ('.mp4', '.webm', '.ogg')
             for fname in sorted(os.listdir(user_images_dir)):
-                if fname.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
-                    img_path_rel = f"{model_name}/user_images/{fname}"
+                lower = fname.lower()
+                if lower.endswith(SUPPORTED_IMAGE_EXTS + SUPPORTED_VIDEO_EXTS):
+                    rel_path = f"{model_name}/user_images/{fname}"
                     meta_path = os.path.join(user_images_dir, Path(fname).with_suffix('.json').name)
                     meta = {}
                     if os.path.exists(meta_path):
@@ -657,8 +677,10 @@ def model_detail(model_name):
                                 meta = json.load(mf)
                         except Exception:
                             meta = {}
+                    utype = 'video' if lower.endswith(SUPPORTED_VIDEO_EXTS) else 'image'
                     user_images.append({
-                        'local_url': url_for('local_static_files', filename=img_path_rel),
+                        'local_url': url_for('local_static_files', filename=rel_path),
+                        'type': utype,
                         'meta': meta.get('meta') or meta
                     })
         if user_images:

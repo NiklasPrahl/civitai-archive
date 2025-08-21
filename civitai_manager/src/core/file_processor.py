@@ -336,6 +336,7 @@ def fetch_user_images(
     limit: int = 0,
     session: Optional[requests.Session] = None,
     model_version_id: Optional[int] = None,
+    user_images_level: str = 'ALL',
 ) -> int:
     """
     Fetch user-generated images for a model and save them under user_images subfolder.
@@ -346,6 +347,7 @@ def fetch_user_images(
         base_name: Base model name (sanitized)
         limit: Number of images to fetch (0 disables)
         session: Optional requests session
+        model_version_id: Civitai modelVersionId to filter exactly
 
     Returns:
         int: Number of images downloaded
@@ -353,6 +355,7 @@ def fetch_user_images(
     if not limit or limit <= 0:
         return 0
 
+    downloaded = 0
     try:
         session = session or requests.Session()
         # Use browser-like headers to reduce likelihood of being blocked by edge protection
@@ -361,115 +364,157 @@ def fetch_user_images(
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
             'Referer': 'https://civitai.com/'
         })
-        # Prefer modelVersionId when available to ensure exact match to the processed model version
+
+        # Optional API token via env var
+        api_token = os.environ.get('CIVITAI_API_TOKEN')
+        if api_token:
+            session.headers['Authorization'] = f'Bearer {api_token}'
+
+        # Cap per docs (0..200). We'll page if more are requested.
+        total_requested = int(limit)
+        per_page = max(1, min(200, total_requested if total_requested > 0 else 100))
+
+        base_url = 'https://civitai.com/api/v1/images'
+        print(f"\nFetching user images: {base_url} (limit={total_requested}, per_page={per_page})")
+
+        def fetch_page(url: str, params: Optional[dict] = None, attempt_base_delay: float = 1.5):
+            data_local = None
+            last_status = None
+            for attempt in range(3):
+                resp = session.get(url, params=params, timeout=20)
+                last_status = resp.status_code
+                if resp.status_code != 200:
+                    print(f"Error fetching user images (Status code: {resp.status_code}) on attempt {attempt+1}")
+                    time.sleep(attempt_base_delay * (attempt + 1))
+                    continue
+                ctype = resp.headers.get('Content-Type', '')
+                if 'application/json' not in ctype:
+                    text_head = (resp.text or '')[:160].replace('\n', ' ')
+                    print(f"Warning: Expected JSON but got Content-Type '{ctype}' (attempt {attempt+1}). Body: {text_head}")
+                    time.sleep(attempt_base_delay * (attempt + 1))
+                    continue
+                try:
+                    data_local = resp.json()
+                    break
+                except Exception as je:
+                    print(f"Warning: Failed to parse user images JSON on attempt {attempt+1}: {je}")
+                    time.sleep(attempt_base_delay * (attempt + 1))
+                    continue
+            return data_local, last_status
+
+        # Prepare first params (prefer modelVersionId)
         params = {
             ('modelVersionId' if model_version_id else 'modelId'): (model_version_id if model_version_id else model_id),
-            'limit': limit
+            'limit': per_page,
         }
-        url = 'https://civitai.com/api/v1/images'
-        print(f"\nFetching user images: {url} params={params}")
-        # Retry a few times to tolerate maintenance/WAF hiccups
-        data = None
-        last_status = None
-        for attempt in range(3):
-            resp = session.get(url, params=params, timeout=20)
-            last_status = resp.status_code
-            if resp.status_code != 200:
-                print(f"Error fetching user images (Status code: {resp.status_code}) on attempt {attempt+1}")
-                time.sleep(1.5 * (attempt + 1))
-                continue
-
-            ctype = resp.headers.get('Content-Type', '')
-            if 'application/json' not in ctype:
-                text_head = (resp.text or '')[:160].replace('\n', ' ')
-                print(f"Warning: Expected JSON but got Content-Type '{ctype}' (attempt {attempt+1}). Body: {text_head}")
-                time.sleep(1.5 * (attempt + 1))
-                continue
-
-            try:
-                data = resp.json()
-                break
-            except Exception as je:
-                print(f"Warning: Failed to parse user images JSON on attempt {attempt+1}: {je}")
-                time.sleep(1.5 * (attempt + 1))
-                continue
-
-        if data is None:
-            print(f"Giving up fetching user images after retries. Last status: {last_status}")
-            return 0
-        # API may return {'items': [...], 'metadata': {...}} or a list directly
-        items = data.get('items') if isinstance(data, dict) else data
-        # Safety filter in case API ignored/changed filtering: keep only exact modelVersionId when provided
-        if model_version_id and items:
-            try:
-                items = [it for it in items if it.get('modelVersionId') == model_version_id]
-            except Exception:
-                pass
-        if (not items) and model_version_id:
-            # Fallback: try with modelId if version-specific query returns nothing
-            try:
-                fb_params = {'modelId': model_id, 'limit': limit}
-                print(f"No items for modelVersionId={model_version_id}. Falling back to modelId with params={fb_params}")
-                fb_resp = session.get(url, params=fb_params, timeout=20)
-                if fb_resp.status_code == 200 and 'application/json' in fb_resp.headers.get('Content-Type', ''):
-                    data = fb_resp.json()
-                    items = data.get('items') if isinstance(data, dict) else data
-                    if model_version_id and items:
-                        # Keep only those that actually reference this version id
-                        try:
-                            items = [it for it in items if it.get('modelVersionId') == model_version_id]
-                        except Exception:
-                            pass
-                else:
-                    print(f"Fallback request failed: status={fb_resp.status_code}, ctype={fb_resp.headers.get('Content-Type')}")
-            except Exception as fe:
-                print(f"Warning: Fallback to modelId failed: {fe}")
-
-        if not items:
-            return 0
+        # Map browsing level to API params
+        level = (user_images_level or 'ALL').upper()
+        if level == 'ALL':
+            params['nsfw'] = 'true'
+        elif level == 'PG':
+            params['nsfw'] = 'false'
+        else:
+            params['nsfw'] = 'true'
+            # Pass nsfwLevel for finer control; server may ignore if unknown
+            params['nsfwLevel'] = level
 
         user_subdir = Path(output_dir) / 'user_images'
         user_subdir.mkdir(parents=True, exist_ok=True)
 
-        downloaded = 0
-        for i, item in enumerate(items):
-            try:
-                image_url = item.get('url') or item.get('meta', {}).get('url')
-                if not image_url:
+        next_page_url: Optional[str] = None
+        tried_fallback = False
+        page_index = 0
+
+        while True:
+            # Decide request target
+            if next_page_url:
+                data, last_status = fetch_page(next_page_url, params=None, attempt_base_delay=1.5)
+            else:
+                data, last_status = fetch_page(base_url, params=params, attempt_base_delay=1.5)
+
+            if data is None:
+                print(f"Giving up fetching user images after retries on page {page_index}. Last status: {last_status}")
+                break
+
+            # Extract items and metadata
+            items = data.get('items') if isinstance(data, dict) else data
+            metadata = data.get('metadata', {}) if isinstance(data, dict) else {}
+
+            # Safety filter for modelVersionId (only when not in fallback mode)
+            if model_version_id and not tried_fallback and items:
+                try:
+                    items = [it for it in items if it.get('modelVersionId') == model_version_id]
+                except Exception:
+                    pass
+
+            if (not items) and (not next_page_url) and model_version_id and not tried_fallback:
+                # First page empty: try fallback with modelId
+                fb_params = {'modelId': model_id, 'limit': per_page}
+                if level == 'ALL':
+                    fb_params['nsfw'] = 'true'
+                elif level == 'PG':
+                    fb_params['nsfw'] = 'false'
+                else:
+                    fb_params['nsfw'] = 'true'
+                    fb_params['nsfwLevel'] = level
+                print(f"No items for modelVersionId={model_version_id}. Falling back to modelId with params={fb_params}")
+                params = fb_params
+                tried_fallback = True
+                # Retry this loop iteration with fallback params
+                next_page_url = None
+                page_index += 1
+                continue
+
+            if not items:
+                break
+
+            # Download items up to requested total
+            for item in items:
+                if total_requested and downloaded >= total_requested:
+                    break
+                try:
+                    image_url = item.get('url') or item.get('meta', {}).get('url')
+                    if not image_url:
+                        continue
+                    # Preserve extension including gifs/webp/avif; default to .jpeg
+                    ext = Path(image_url.split('?')[0]).suffix
+                    if not ext:
+                        ext = '.jpeg'
+                    filename = f"{sanitize_filename(base_name)}_user_{downloaded}{ext}"
+                    target_path = user_subdir / filename
+
+                    r = session.get(image_url, stream=True, timeout=20)
+                    if r.status_code == 200:
+                        with open(target_path, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                        # Save metadata
+                        meta = item
+                        json_path = target_path.with_suffix('.json')
+                        with open(json_path, 'w', encoding='utf-8') as jf:
+                            json.dump(meta, jf, indent=4)
+                        downloaded += 1
+                    else:
+                        print(f"Failed to download user image (status {r.status_code})")
+                except Exception as ie:
+                    print(f"Error downloading user image: {ie}")
                     continue
 
-                # Build filename
-                ext = Path(image_url.split('?')[0]).suffix or '.jpg'
-                # Use a simple user image naming to avoid collisions
-                filename = f"{sanitize_filename(base_name)}_user_{i}{ext}"
-                target_path = user_subdir / filename
+            if total_requested and downloaded >= total_requested:
+                break
 
-                # Download image
-                r = session.get(image_url, stream=True, timeout=20)
-                if r.status_code == 200:
-                    with open(target_path, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-
-                    # Save metadata next to image
-                    meta = item
-                    json_path = target_path.with_suffix('.json')
-                    with open(json_path, 'w', encoding='utf-8') as jf:
-                        json.dump(meta, jf, indent=4)
-
-                    downloaded += 1
-                else:
-                    print(f"Failed to download user image (status {r.status_code})")
-            except Exception as ie:
-                print(f"Error downloading user image: {ie}")
-                continue
+            # Determine next page via cursor/nextPage
+            next_page_url = metadata.get('nextPage') if isinstance(metadata, dict) else None
+            if not next_page_url:
+                break
+            page_index += 1
 
         print(f"Downloaded {downloaded} user images")
         return downloaded
     except Exception as e:
-        print(f"Error in fetch_user_images: {e}")
-        return 0
+        print(f"Error fetching user images: {e}")
+        return downloaded
 
 def fetch_model_details(
     model_id: int,
@@ -478,14 +523,14 @@ def fetch_model_details(
     session: Optional[requests.Session] = None
 ) -> bool:
     """
-    Fetch detailed model information from Civitai API
-    
+    Fetch model details from Civitai API and save them alongside the model files.
+
     Args:
-        model_id: The model ID from Civitai
-        output_dir: Directory to save the output
-        safetensors_path: Path to the safetensors file
-        session: Optional requests session for HTTP calls
-        
+        model_id: Civitai model ID
+        output_dir: Model output directory
+        safetensors_path: Path to the original model file for naming
+        session: Optional requests session
+
     Returns:
         bool: True if successful, False otherwise
     """
@@ -493,16 +538,16 @@ def fetch_model_details(
         civitai_model_url = f"https://civitai.com/api/v1/models/{model_id}"
         print("\nFetching model details from Civitai API:")
         print(civitai_model_url)
-        
+
         session = session or requests.Session()
         response = session.get(civitai_model_url)
-        
-        base_name = sanitize_filename(safetensors_path.stem)
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
 
-        model_data_path = output_dir / f"{base_name}_civitai_model.json"
-        
+        base_name = sanitize_filename(safetensors_path.stem)
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        model_data_path = output_path / f"{base_name}_civitai_model.json"
+
         with open(model_data_path, 'w', encoding='utf-8') as f:
             if response.status_code == 200:
                 json.dump(response.json(), f, indent=4)
@@ -517,7 +562,6 @@ def fetch_model_details(
                 json.dump(error_data, f, indent=4)
                 print(f"Error: Could not fetch model details (Status code: {response.status_code})")
                 return False
-                
     except Exception as e:
         print(f"Error fetching model details: {str(e)}")
         return False
@@ -588,7 +632,8 @@ def process_single_file(
     html_only: bool = False,
     only_update: bool = False,
     session: Optional[requests.Session] = None,
-    user_images_limit: int = 0
+    user_images_limit: int = 0,
+    user_images_level: str = 'ALL'
 ) -> bool:
     """
     Process a single file
@@ -686,6 +731,7 @@ def process_single_file(
                         user_images_limit,
                         session=session,
                         model_version_id=model_version_id,
+                        user_images_level=user_images_level,
                     )
                 except Exception as e:
                     print(f"Warning: failed to fetch user images: {e}")
